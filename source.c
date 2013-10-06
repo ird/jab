@@ -221,7 +221,7 @@ source_process_isdir(char *p_path, struct dirent *p_dirent, struct stat *p_stat)
 	char *next_path = path_path_plus_name(p_path, p_dirent->d_name);
 	if (next_path == NULL)
 	{
-		printf("source_walk source_next_path\n");
+		printf("source_process_isdir path_path_plus_name\n");
 		result = 0;
 	}
 	else
@@ -253,7 +253,7 @@ source_process_stat(char *p_path, struct dirent *p_dirent, struct stat *p_stat, 
 	{
 		if (!source_process_isdir(p_path, p_dirent, p_stat))
 		{
-			printf("source_process_stat source_process_dir\n");
+			printf("source_process_stat source_process_isdir\n");
 			result = 0;
 		}
 	}
@@ -267,7 +267,7 @@ source_process_dirent(char *p_path, struct dirent *p_dirent)
 	char *filename = source_source_base_path_plus_path_plus_name(p_path, p_dirent->d_name);
 	if (filename == NULL)
 	{
-		printf("source_process_dirent source_base_path_plus_path_plus_name\n");
+		printf("source_process_dirent source_source_base_path_plus_path_plus_name\n");
 		result = 0;
 	}
 	else
@@ -328,7 +328,7 @@ source_process_path(char *p_path)
 	char *path = source_source_base_path_plus_path(p_path);
 	if (path == NULL)
 	{
-		printf("source_process_path source_base_path_plus_path\n");
+		printf("source_process_path source_source_base_path_plus_path\n");
 		result = 0;
 	}
 	else
@@ -346,7 +346,7 @@ source_process_path(char *p_path)
 		{
 			if (!source_process_dir(p_path, dir))
 			{
-				printf("source_process_path process_dir\n");
+				printf("source_process_path source_process_dir\n");
 				result = 0;
 			}
 			closedir(dir);
@@ -410,7 +410,7 @@ source(char *p_path)
 	int result = -1;
 	if (!source_setup_device(p_path))
 	{
-		printf("source source_device\n");
+		printf("source source_setup_device\n");
 		result = 0;
 	}
 	else if (!source_setup_source_base_path(p_path))
