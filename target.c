@@ -12,6 +12,7 @@
  */
 
 #include <dirent.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -28,6 +29,16 @@ size_t m_target_base_path_size;
 char *m_target_current_path;
 
 size_t m_target_current_path_size;
+
+struct stat m_target_current_stat;
+
+struct tm m_target_current_tm;
+
+struct dirent m_target_current_dirent;
+
+off_t m_target_remaining_size;
+
+FILE *m_target_file;
 
 char *
 target_target_base_path_plus_path(char *p_path)
@@ -103,25 +114,22 @@ int
 target_receive_file()
 {
 	int result = -1;
-	struct stat stat;
-	struct tm tm;
-	struct dirent dirent;
 	int input_items_matched =
 		sscanf
 		(
 			(char *)m_transfer_buffer,
 			"0%o %d %d %lu %04d-%02d-%02d %02d:%02d:%02d %s\n",
-			&stat.st_mode,
-			&stat.st_uid,
-			&stat.st_gid,
-			&stat.st_size,
-			&tm.tm_year,// + 1900,
-			&tm.tm_mon,// + 1,
-			&tm.tm_mday,
-			&tm.tm_hour,
-			&tm.tm_min,
-			&tm.tm_sec,
-			dirent.d_name
+			&m_target_current_stat.st_mode,
+			&m_target_current_stat.st_uid,
+			&m_target_current_stat.st_gid,
+			&m_target_current_stat.st_size,
+			&m_target_current_tm.tm_year,// + 1900,
+			&m_target_current_tm.tm_mon,// + 1,
+			&m_target_current_tm.tm_mday,
+			&m_target_current_tm.tm_hour,
+			&m_target_current_tm.tm_min,
+			&m_target_current_tm.tm_sec,
+			m_target_current_dirent.d_name
 		);
 	if (input_items_matched == EOF)
 	{
@@ -133,12 +141,39 @@ target_receive_file()
 	}
 	else
 	{
-		tm.tm_year -= 1900;
-		tm.tm_mon--;
+		m_target_current_tm.tm_year -= 1900;
+		m_target_current_tm.tm_mon--;
 	}
+	m_target_current_path = target_target_base_path_plus_path(m_target_current_dirent.d_name);
+	if (stat(m_target_current_path, &m_target_current_stat) == -1)
+	{
+		if (errno == 2)
+		{
+			m_target_file = fopen(m_target_current_path, "w");
+			if (m_target_file == NULL)
+			{
+				printf("target_receive_file fopen\n");
+				result = 0;
+			}
+			else
+			{
+				m_target_remaining_size = m_target_current_stat.st_size;
+				memcpy(m_transfer_buffer, "DATA\n\0", 6);
+			}
+		}
+		else
+		{
+			printf("target stat error: %d %s\n", errno, strerror(errno));
+			result = 0;
+		}
+	}
+	else
+	{
+		memcpy(m_transfer_buffer, "DONE\n\0", 6);
+	}
+
 	//memcpy(m_transfer_buffer, "HASH\n\0", 6);
 	//memcpy(m_transfer_buffer, "DATA\n\0", 6);
-	memcpy(m_transfer_buffer, "DONE\n\0", 6);
 	//memcpy(m_transfer_buffer, "STOP\n\0", 6);
 	return result;
 }
@@ -159,6 +194,32 @@ target_receive_hash()
 
 int
 target_receive_data()
+{
+	int result = -1;
+	size_t transfer_size = TRANSFER_BUFFER_SIZE;
+	if (m_target_remaining_size < transfer_size)
+	{
+		transfer_size = m_target_remaining_size;
+	}
+	size_t bytes_written = fwrite(m_transfer_buffer, 1, transfer_size, m_target_file);
+	if (bytes_written < transfer_size)
+	{
+		printf("target_receive_data fwrite\n");
+		result = 0;
+	}
+	else
+	{
+		m_target_remaining_size -= transfer_size;
+		if (m_target_remaining_size == 0)
+		{
+			fclose(m_target_file);
+		}
+	}
+	return result;
+}
+
+int
+target_receive_stop()
 {
 	int result = -1;
 	return result;

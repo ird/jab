@@ -35,4 +35,7 @@ target_receive_hash();
 int
 target_receive_data();
 
+int
+target_receive_stop();
+
 #endif /* TARGET_H_ */

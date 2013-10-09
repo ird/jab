@@ -27,5 +27,8 @@ transfer_hash_to_target();
 int
 transfer_data_to_target();
 
+int
+transfer_stop_to_target();
+
 
 #endif /* TRANSFER_H_ */

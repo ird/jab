@@ -157,17 +157,11 @@ int
 source_process_hash(char *p_filename)
 {
 	int result = -1;
-	char sha1_string[SHA1_STRING_SIZE + 1];
-	if (!hash_file_to_string(p_filename, sha1_string))
+	//char sha1_string[SHA1_STRING_SIZE + 1];
+	//if (!hash_file_to_string(p_filename, sha1_string))
+	if (!hash_file_to_string(p_filename, (char *)m_transfer_buffer))
 	{
 		result = 0;
-	}
-	else
-	{
-		transfer_hash_to_target();
-		// .
-		// .
-		// .
 	}
 	return result;
 }
@@ -198,9 +192,60 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 					printf("source_process_isreg source_process_hash\n");
 					result = 0;
 				}
+				else
+				{
+					if (!transfer_hash_to_target())
+					{
+						printf("source_process_isreg transfer_hash_to_target\n");
+						result = 0;
+					}
+					else
+					{
+					}
+				}
 			}
 			else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
 			{
+				FILE *file = fopen(p_filename, "r");
+				if (file == NULL)
+				{
+					printf("source_process_isreg fopen\n");
+					result = 0;
+				}
+				else
+				{
+					off_t remaining_size = p_stat->st_size;
+					size_t transfer_size = TRANSFER_BUFFER_SIZE;
+					while (remaining_size)
+					{
+						// TODO: Comparing off_t with size_t? Work on this you lazy shit.
+						if (remaining_size < transfer_size)
+						{
+							transfer_size = remaining_size;
+						}
+						size_t bytes_read = fread(m_transfer_buffer, 1, transfer_size, file);
+						if (bytes_read < transfer_size)
+						{
+							printf("source_process_isreg fread\n");
+							result = 0;
+							break;
+						}
+						else
+						{
+							if (!transfer_data_to_target())
+							{
+								printf("source_process_isreg transfer_data_to_target\n");
+								result = 0;
+								break;
+							}
+							else
+							{
+								remaining_size -= transfer_size;
+							}
+						}
+					}
+					fclose(file);
+				}
 				// send data
 			}
 			else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)

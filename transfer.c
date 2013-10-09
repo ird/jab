@@ -40,3 +40,9 @@ transfer_data_to_target()
 {
 	return target_receive_data();
 }
+
+int
+transfer_stop_to_target()
+{
+	return target_receive_stop();
+}
