@@ -22,6 +22,12 @@ int
 transfer_file_to_target();
 
 int
+transfer_path_to_target();
+
+int
+transfer_back_to_target();
+
+int
 transfer_hash_to_target();
 
 int

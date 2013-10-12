@@ -30,6 +30,9 @@ int
 target_receive_path();
 
 int
+target_receive_back();
+
+int
 target_receive_hash();
 
 int

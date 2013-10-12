@@ -38,8 +38,12 @@ char *m_source_base_path;
 
 size_t m_source_base_path_size;
 
+char *m_source_current_path;
+
+size_t m_source_current_path_size;
+
 int
-source_process_path(char *p_path);
+source_process_current_path();
 
 int
 source_format_file(struct stat *p_stat, struct dirent *p_dirent)
@@ -85,28 +89,39 @@ int
 source_format_path(struct stat *p_stat, struct dirent *p_dirent)
 {
 	int result = -1;
-	struct tm *tm;
+	/*struct tm *tm;
 	if ((tm = gmtime((time_t *)&p_stat->st_mtim)) == NULL)
 	{
 		result = 0;
 	}
 	else
 	{
-		printf
-		(
-			"> 0%o %d %d %04d-%02d-%02d %02d:%02d:%02d %s\n",
-			p_stat->st_mode,
-			p_stat->st_uid,
-			p_stat->st_gid,
-			tm->tm_year + 1900,
-			tm->tm_mon + 1,
-			tm->tm_mday,
-			tm->tm_hour,
-			tm->tm_min,
-			tm->tm_sec,
-			p_dirent->d_name
-		);
-	}
+		*/int size =
+			snprintf
+			(
+				(void *)&m_transfer_buffer,
+				TRANSFER_BUFFER_SIZE,
+				/*"0%o %d %d %04d-%02d-%02d %02d:%02d:%02d */"%s\n",
+				/*p_stat->st_mode,
+				p_stat->st_uid,
+				p_stat->st_gid,
+				tm->tm_year + 1900,
+				tm->tm_mon + 1,
+				tm->tm_mday,
+				tm->tm_hour,
+				tm->tm_min,
+				tm->tm_sec,
+				*/p_dirent->d_name
+			);
+		if (size < 0)
+		{
+			result = 0;
+		}
+		else if (size >= TRANSFER_BUFFER_SIZE)
+		{
+			result = 0;
+		}
+	//}
 	return result;
 }
 
@@ -153,6 +168,70 @@ source_source_base_path_plus_path(char *p_path)
 	return path;
 }
 
+char *
+source_source_current_path_plus_filename(char *p_filename)
+{
+	size_t filename_size = strlen(p_filename);
+	char *result = malloc(m_source_current_path_size + filename_size + 1);
+	if (result == NULL)
+	{
+		printf("source_source_current_path_plus_filename malloc\n");
+	}
+	else
+	{
+		memcpy(result, m_source_current_path, m_source_current_path_size);
+		memcpy(result + m_source_current_path_size, p_filename, filename_size + 1);
+	}
+	return result;
+}
+
+int
+source_append_path_to_source_current_path(char *p_path)
+{
+	int result = -1;
+	size_t path_size = strlen(p_path);
+	char *source_current_path = realloc(m_source_current_path, m_source_current_path_size + path_size + 2);
+	if (source_current_path == NULL)
+	{
+		printf("source_append_path_to_source_current_path realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_source_current_path = source_current_path;
+		memcpy(m_source_current_path + m_source_current_path_size, p_path, path_size);
+		*(m_source_current_path + m_source_current_path_size + path_size) = '/';
+		*(m_source_current_path + m_source_current_path_size + path_size + 1) = 0;
+		m_source_current_path_size += path_size + 1;
+	}
+	return result;
+}
+
+int
+source_back()
+{
+	int result = -1;
+	char *tail = m_source_current_path + m_source_current_path_size - 2;
+	while (*tail != '/')
+	{
+		tail--;
+	}
+	size_t size = tail - m_source_current_path + 1;
+	tail = realloc(m_source_current_path, size + 1);
+	if (tail == NULL)
+	{
+		printf("source_back realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_source_current_path = tail;
+		m_source_current_path_size = size;
+		*(m_source_current_path + m_source_current_path_size) = 0;
+	}
+	return result;
+}
+
 int
 source_process_hash(char *p_filename)
 {
@@ -171,48 +250,52 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 {
 	int result = -1;
 	m_source_files_found++;
-	if (!source_format_file(p_stat, p_dirent))
+	FILE *file = fopen(p_filename, "r");
+	if (errno == EACCES)
 	{
-		printf("source_process_isreg source_format_file\n");
-		result = 0;
+		m_source_files_skipped++;
 	}
-	else if (!transfer_file_to_target())
+	else if (file == NULL)
 	{
-		printf("source_process_isreg transfer_file_to_target\n");
+		printf("source_process_isreg fopen %d %s %s\n", errno, strerror(errno), p_filename);
 		result = 0;
 	}
 	else
 	{
-		if (strcmp((char *)m_transfer_buffer, "DONE\n") != 0)
+		if (!source_format_file(p_stat, p_dirent))
 		{
-			if (strcmp((char *)m_transfer_buffer, "HASH\n") == 0)
+			printf("source_process_isreg source_format_file\n");
+			result = 0;
+		}
+		else if (!transfer_file_to_target())
+		{
+			printf("source_process_isreg transfer_file_to_target\n");
+			result = 0;
+		}
+		else
+		{
+			if (strcmp((char *)m_transfer_buffer, "DONE\n") != 0)
 			{
-				if (!source_process_hash(p_filename))
+				if (strcmp((char *)m_transfer_buffer, "HASH\n") == 0)
 				{
-					printf("source_process_isreg source_process_hash\n");
-					result = 0;
-				}
-				else
-				{
-					if (!transfer_hash_to_target())
+					if (!source_process_hash(p_filename))
 					{
-						printf("source_process_isreg transfer_hash_to_target\n");
+						printf("source_process_isreg source_process_hash\n");
 						result = 0;
 					}
 					else
 					{
+						if (!transfer_hash_to_target())
+						{
+							printf("source_process_isreg transfer_hash_to_target\n");
+							result = 0;
+						}
+						else
+						{
+						}
 					}
 				}
-			}
-			else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
-			{
-				FILE *file = fopen(p_filename, "r");
-				if (file == NULL)
-				{
-					printf("source_process_isreg fopen\n");
-					result = 0;
-				}
-				else
+				else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
 				{
 					off_t remaining_size = p_stat->st_size;
 					size_t transfer_size = TRANSFER_BUFFER_SIZE;
@@ -244,42 +327,60 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 							}
 						}
 					}
-					fclose(file);
+					// send data
 				}
-				// send data
-			}
-			else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)
-			{
-				result = 0;
+				else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)
+				{
+					result = 0;
+				}
 			}
 		}
+		fclose(file);
 	}
 	return result;
 }
 
 int
-source_process_isdir(char *p_path, struct dirent *p_dirent, struct stat *p_stat)
+source_process_isdir(struct dirent *p_dirent, struct stat *p_stat)
 {
 	int result = -1;
 	m_source_directories_found++;
-	source_format_path(p_stat, p_dirent);
-	char *next_path = path_path_plus_name(p_path, p_dirent->d_name);
-	if (next_path == NULL)
+	strcpy((char *)m_transfer_buffer, p_dirent->d_name);
+	if (!transfer_path_to_target())
 	{
-		printf("source_process_isdir path_path_plus_name\n");
+		printf("source_process_isdir transfer_path_to_target\n");
 		result = 0;
 	}
-	else
+	else if (!source_append_path_to_source_current_path(p_dirent->d_name))
 	{
-		result = source_process_path(next_path);
-		printf("<\n");
-		free(next_path);
+		printf("source_process_isdir source_append_path_to_source_current_path\n");
+		result = 0;
+	}
+	else if (!source_process_current_path())
+	{
+		printf("source_process_isdir source_process_current_path\n");
+		result = 0;
+	}
+	else if (!source_format_path(p_stat, p_dirent))
+	{
+		printf("source_process_isdir source_format_path\n");
+		result = 0;
+	}
+	else if (!transfer_back_to_target())
+	{
+		printf("source_process_isdir transfer_back_to_target\n");
+		result = 0;
+	}
+	else if (!source_back())
+	{
+		printf("source_process_isdir source_back\n");
+		result = 0;
 	}
 	return result;
 }
 
 int
-source_process_stat(char *p_path, struct dirent *p_dirent, struct stat *p_stat, char *p_filename)
+source_process_stat(struct dirent *p_dirent, struct stat *p_stat, char *p_filename)
 {
 	int result = -1;
 	if (S_ISLNK(p_stat->st_mode))
@@ -296,7 +397,7 @@ source_process_stat(char *p_path, struct dirent *p_dirent, struct stat *p_stat, 
 	}
 	else if (S_ISDIR(p_stat->st_mode))
 	{
-		if (!source_process_isdir(p_path, p_dirent, p_stat))
+		if (!source_process_isdir(p_dirent, p_stat))
 		{
 			printf("source_process_stat source_process_isdir\n");
 			result = 0;
@@ -306,10 +407,10 @@ source_process_stat(char *p_path, struct dirent *p_dirent, struct stat *p_stat, 
 }
 
 int
-source_process_dirent(char *p_path, struct dirent *p_dirent)
+source_process_dirent(struct dirent *p_dirent)
 {
 	int result = -1;
-	char *filename = source_source_base_path_plus_path_plus_name(p_path, p_dirent->d_name);
+	char *filename = source_source_current_path_plus_filename(p_dirent->d_name);
 	if (filename == NULL)
 	{
 		printf("source_process_dirent source_source_base_path_plus_path_plus_name\n");
@@ -320,12 +421,15 @@ source_process_dirent(char *p_path, struct dirent *p_dirent)
 		struct stat stat;
 		if (lstat(filename, &stat) == -1)
 		{
-			printf("source_process_dirent lstat\n");
-			result = 0;
+			if (errno != EACCES)
+			{
+				printf("source_process_dirent lstat %s\n", strerror(errno));
+				result = 0;
+			}
 		}
 		else if (stat.st_dev == m_source_dev && !S_ISFIFO(stat.st_mode) && !S_ISCHR(stat.st_mode) && !S_ISBLK(stat.st_mode) && !S_ISSOCK(stat.st_mode))
 		{
-			if (!source_process_stat(p_path, p_dirent, &stat, filename))
+			if (!source_process_stat(p_dirent, &stat, filename))
 			{
 				printf("source_process_dirent source_process_stat\n");
 				result = 0;
@@ -337,7 +441,7 @@ source_process_dirent(char *p_path, struct dirent *p_dirent)
 }
 
 int
-source_process_dir(char *p_path, DIR *p_dir)
+source_process_dir(DIR *p_dir)
 {
 	int result = -1;
 	while (result)
@@ -357,7 +461,7 @@ source_process_dir(char *p_path, DIR *p_dir)
 		{
 			continue;
 		}
-		if (!source_process_dirent(p_path, dirent))
+		if (!source_process_dirent(dirent))
 		{
 			printf("source_process_dir source_process_dirent\n");
 			result = 0;
@@ -367,36 +471,26 @@ source_process_dir(char *p_path, DIR *p_dir)
 }
 
 int
-source_process_path(char *p_path)
+source_process_current_path()
 {
 	int result = -1;
-	char *path = source_source_base_path_plus_path(p_path);
-	if (path == NULL)
+	DIR *dir = opendir(m_source_current_path);
+	if (dir == NULL)
 	{
-		printf("source_process_path source_source_base_path_plus_path\n");
-		result = 0;
+		if (errno != EACCES)
+		{
+			printf("source_process_current_path opendir %s\n", strerror(errno));
+			result = 0;
+		}
 	}
 	else
 	{
-		DIR *dir = opendir(path);
-		if (dir == NULL)
+		if (!source_process_dir(dir))
 		{
-			if (errno != EACCES)
-			{
-				printf("source_process_path opendir %s\n", strerror(errno));
-				result = 0;
-			}
+			printf("source_process_current_path source_process_dir\n");
+			result = 0;
 		}
-		else
-		{
-			if (!source_process_dir(p_path, dir))
-			{
-				printf("source_process_path source_process_dir\n");
-				result = 0;
-			}
-			closedir(dir);
-		}
-		free(path);
+		closedir(dir);
 	}
 	return result;
 }
@@ -466,11 +560,22 @@ source(char *p_path)
 	else
 	{
 		m_source_base_path_size = strlen(m_source_base_path);
-		m_source_directories_found = 0;
-		m_source_directories_skipped = 0;
-		m_source_files_found = 0;
-		m_source_files_skipped = 0;
-		result = source_process_path("");
+		if ((m_source_current_path = malloc(m_source_base_path_size + 1)) == NULL)
+		{
+			printf("source malloc\n");
+			result = 0;
+		}
+		else
+		{
+			memcpy(m_source_current_path, m_source_base_path, m_source_base_path_size + 1);
+			m_source_current_path_size = m_source_base_path_size;
+			m_source_directories_found = 0;
+			m_source_directories_skipped = 0;
+			m_source_files_found = 0;
+			m_source_files_skipped = 0;
+			result = source_process_current_path();
+			free(m_source_current_path);
+		}
 		free(m_source_base_path);
 	}
 	return result;

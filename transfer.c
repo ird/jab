@@ -30,6 +30,12 @@ transfer_path_to_target()
 }
 
 int
+transfer_back_to_target()
+{
+	return target_receive_back();
+}
+
+int
 transfer_hash_to_target()
 {
 	return target_receive_hash();
