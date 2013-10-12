@@ -124,50 +124,7 @@ source_format_path(struct stat *p_stat, struct dirent *p_dirent)
 	//}
 	return result;
 }
-/*
-char *
-source_source_base_path_plus_path_plus_name(char *p_path, char *p_name)
-{
-	char *filename = NULL;
-	size_t path_size = strlen(p_path);
-	size_t name_size = strlen(p_name);
-	if (!path_size)
-	{
-		filename = (char *)malloc(m_source_base_path_size + name_size + 1);
-		if (filename != NULL)
-		{
-			memcpy(filename, m_source_base_path, m_source_base_path_size);
-			memcpy(filename + m_source_base_path_size, p_name, name_size + 1);
-		}
-	}
-	else
-	{
-		filename = (char *)malloc(m_source_base_path_size + path_size + 1 + name_size + 1);
-		if (filename != NULL)
-		{
-			memcpy(filename, m_source_base_path, m_source_base_path_size);
-			memcpy(filename + m_source_base_path_size, p_path, path_size);
-			*(filename + m_source_base_path_size + path_size) = '/';
-			memcpy(filename + m_source_base_path_size + path_size + 1, p_name, name_size + 1);
-		}
-	}
-	return filename;
-}
 
-char *
-source_source_base_path_plus_path(char *p_path)
-{
-	char *path = NULL;
-	size_t path_size = strlen(p_path);
-	path = (char *)malloc(m_source_base_path_size + path_size + 1);
-	if (path != NULL)
-	{
-		memcpy(path, m_source_base_path, m_source_base_path_size);
-		memcpy(path + m_source_base_path_size, p_path, path_size + 1);
-	}
-	return path;
-}
-*/
 char *
 source_source_current_path_plus_filename(char *p_filename)
 {
@@ -233,6 +190,51 @@ source_leave_directory()
 }
 
 int
+source_enter_file(char *p_file_name)
+{
+	int result = -1;
+	size_t size = strlen(p_file_name);
+	char *path = realloc(m_source_current_path, m_source_current_path_size + size + 2);
+	if (path == NULL)
+	{
+		printf("source_enter_file realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_source_current_path = path;
+		memcpy(m_source_current_path + m_source_current_path_size, p_file_name, size + 1);
+		m_source_current_path_size += size;
+	}
+	return result;
+}
+
+int
+source_leave_file()
+{
+	int result = -1;
+	char *tail = m_source_current_path + m_source_current_path_size - 1;
+	while (*tail != '/')
+	{
+		tail--;
+	}
+	size_t size = tail - m_source_current_path + 1;
+	tail = realloc(m_source_current_path, size + 1);
+	if (tail == NULL)
+	{
+		printf("source_leave_file realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_source_current_path = tail;
+		m_source_current_path_size = size;
+		*(m_source_current_path + m_source_current_path_size) = 0;
+	}
+	return result;
+}
+
+int
 source_process_hash(char *p_filename)
 {
 	int result = -1;
@@ -273,69 +275,69 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 		}
 		else
 		{
-			if (strcmp((char *)m_transfer_buffer, "DONE\n") != 0)
+			if (strcmp((char *)m_transfer_buffer, "DONE\n") == 0)
 			{
-				if (strcmp((char *)m_transfer_buffer, "HASH\n") == 0)
+			}
+			else if (strcmp((char *)m_transfer_buffer, "HASH\n") == 0)
+			{
+				if (!source_process_hash(p_filename))
 				{
-					if (!source_process_hash(p_filename))
+					printf("source_process_isreg source_process_hash\n");
+					result = 0;
+				}
+				else
+				{
+					if (!transfer_hash_to_target())
 					{
-						printf("source_process_isreg source_process_hash\n");
+						printf("source_process_isreg transfer_hash_to_target\n");
 						result = 0;
 					}
 					else
 					{
-						if (!transfer_hash_to_target())
-						{
-							printf("source_process_isreg transfer_hash_to_target\n");
-							result = 0;
-						}
-						else
-						{
-						}
 					}
 				}
-				else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
+			}
+			else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
+			{
+				off_t remaining_size = p_stat->st_size;
+				size_t transfer_size = TRANSFER_BUFFER_SIZE;
+				while (remaining_size)
 				{
-					off_t remaining_size = p_stat->st_size;
-					size_t transfer_size = TRANSFER_BUFFER_SIZE;
-					while (remaining_size)
+					// TODO: Comparing off_t with size_t? Work on this you lazy shit.
+					if (remaining_size < transfer_size)
 					{
-						// TODO: Comparing off_t with size_t? Work on this you lazy shit.
-						if (remaining_size < transfer_size)
+						transfer_size = remaining_size;
+					}
+					size_t bytes_read = fread(m_transfer_buffer, 1, transfer_size, file);
+					if (bytes_read < transfer_size)
+					{
+						printf("source_process_isreg fread\n");
+						result = 0;
+						break;
+					}
+					else
+					{
+						if (!transfer_data_to_target())
 						{
-							transfer_size = remaining_size;
-						}
-						size_t bytes_read = fread(m_transfer_buffer, 1, transfer_size, file);
-						if (bytes_read < transfer_size)
-						{
-							printf("source_process_isreg fread\n");
+							printf("source_process_isreg transfer_data_to_target\n");
 							result = 0;
 							break;
 						}
 						else
 						{
-							if (!transfer_data_to_target())
-							{
-								printf("source_process_isreg transfer_data_to_target\n");
-								result = 0;
-								break;
-							}
-							else
-							{
-								remaining_size -= transfer_size;
-							}
+							remaining_size -= transfer_size;
 						}
 					}
-					if (!transfer_done_to_target())
-					{
-						printf("source_process_isreg transfer_done_to_target\n");
-						result = 0;
-					}
 				}
-				else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)
+				if (!transfer_done_to_target())
 				{
+					printf("source_process_isreg transfer_done_to_target\n");
 					result = 0;
 				}
+			}
+			else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)
+			{
+				result = 0;
 			}
 		}
 		fclose(file);
@@ -413,6 +415,7 @@ int
 source_process_dirent(struct dirent *p_dirent)
 {
 	int result = -1;
+	// TODO: Something.
 	char *filename = source_source_current_path_plus_filename(p_dirent->d_name);
 	if (filename == NULL)
 	{

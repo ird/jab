@@ -136,6 +136,31 @@ target_enter_file(char *p_file_name)
 }
 
 int
+target_leave_file()
+{
+	int result = -1;
+	char *tail = m_target_current_path + m_target_current_path_size - 1;
+	while (*tail != '/')
+	{
+		tail--;
+	}
+	size_t size = tail - m_target_current_path + 1;
+	tail = realloc(m_target_current_path, size + 1);
+	if (tail == NULL)
+	{
+		printf("target_leave_file realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_target_current_path = tail;
+		m_target_current_path_size = size;
+		*(m_target_current_path + m_target_current_path_size) = 0;
+	}
+	return result;
+}
+
+int
 target_setup_target_base_path(char *p_path)
 {
 	int result = -1;
@@ -265,6 +290,11 @@ target_receive_file()
 		else
 		{
 			memcpy(m_transfer_buffer, "DONE\n\0", 6);
+			if (!target_leave_file())
+			{
+				printf("target_receive_file target_leave_file\n");
+				result = 0;
+			}
 		}
 	}
 	//memcpy(m_transfer_buffer, "HASH\n\0", 6);
@@ -288,7 +318,7 @@ target_receive_path()
 		struct stat s;
 		if (stat(m_target_current_path, &s) == -1)
 		{
-			if (0)//errno != 2)
+			if (errno != ENOENT)
 			{
 				printf("target_receive_path stat %d %s\n", errno, strerror(errno));
 				result = 0;
@@ -318,31 +348,6 @@ target_receive_path()
 			 */
 			memcpy(m_transfer_buffer, "DONE\n\0", 6);
 		}
-	}
-	return result;
-}
-
-int
-target_file_done()
-{
-	int result = -1;
-	char *tail = m_target_current_path + m_target_current_path_size - 1;
-	while (*tail != '/')
-	{
-		tail--;
-	}
-	size_t size = tail - m_target_current_path + 1;
-	tail = realloc(m_target_current_path, size + 1);
-	if (tail == NULL)
-	{
-		printf("target_file_done realloc\n");
-		result = 0;
-	}
-	else
-	{
-		m_target_current_path = tail;
-		m_target_current_path_size = size;
-		*(m_target_current_path + m_target_current_path_size) = 0;
 	}
 	return result;
 }
@@ -378,11 +383,6 @@ target_receive_data()
 	else
 	{
 		m_target_remaining_size -= transfer_size;
-		/*if (m_target_remaining_size == 0)
-		{
-			fclose(m_target_file);
-			target_file_done();
-		}*/
 	}
 	return result;
 }
@@ -391,8 +391,16 @@ int
 target_receive_done()
 {
 	int result = -1;
-	fclose(m_target_file);
-	target_file_done();
+	if (fclose(m_target_file) == EOF)
+	{
+		printf("target_receive_done fclose %d %s %s\n", errno, strerror(errno), m_target_current_path);
+		result = 0;
+	}
+	else if (!target_leave_file())
+	{
+		printf("target_receive_done target_leave_file\n");
+		result = 0;
+	}
 	return result;
 }
 
