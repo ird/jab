@@ -34,7 +34,7 @@ char *m_target_base_path;
 size_t m_target_base_path_size;
 
 /*
- * The current path of our backup target. m_target_current_path always has a trailing /.
+ * The current path of our backup target.
  */
 char *m_target_current_path;
 
@@ -69,43 +69,68 @@ target_target_base_path_plus_path(char *p_path)
 }
 
 int
-target_append_path_to_target_current_path(char *p_path)
+target_enter_directory(char *p_directory_name)
 {
 	int result = -1;
-	size_t path_size = strlen(p_path);
-	char *target_current_path = realloc(m_target_current_path, m_target_current_path_size + path_size + 2);
-	if (target_current_path == NULL)
+	size_t size = strlen(p_directory_name);
+	char *path = realloc(m_target_current_path, m_target_current_path_size + size + 2);
+	if (path == NULL)
 	{
 		printf("target_append_path_to_target_current_path realloc\n");
 		result = 0;
 	}
 	else
 	{
-		m_target_current_path = target_current_path;
-		memcpy(m_target_current_path + m_target_current_path_size, p_path, path_size);
-		*(m_target_current_path + m_target_current_path_size + path_size) = '/';
-		*(m_target_current_path + m_target_current_path_size + path_size + 1) = 0;
-		m_target_current_path_size += path_size + 1;
+		m_target_current_path = path;
+		memcpy(m_target_current_path + m_target_current_path_size, p_directory_name, size);
+		*(m_target_current_path + m_target_current_path_size + size) = '/';
+		*(m_target_current_path + m_target_current_path_size + size + 1) = 0;
+		m_target_current_path_size += size + 1;
 	}
 	return result;
 }
 
 int
-target_append_filename_to_target_current_path(char *p_filename)
+target_leave_directory()
 {
 	int result = -1;
-	size_t filename_size = strlen(p_filename);
-	char *path = realloc(m_target_current_path, m_target_current_path_size + filename_size + 2);
+	char *tail = m_target_current_path + m_target_current_path_size - 2;
+	while (*tail != '/')
+	{
+		tail--;
+	}
+	size_t size = tail - m_target_current_path + 1;
+	tail = realloc(m_target_current_path, size + 1);
+	if (tail == NULL)
+	{
+		printf("target_receive_back realloc\n");
+		result = 0;
+	}
+	else
+	{
+		m_target_current_path = tail;
+		m_target_current_path_size = size;
+		*(m_target_current_path + m_target_current_path_size) = 0;
+	}
+	return result;
+}
+
+int
+target_enter_file(char *p_file_name)
+{
+	int result = -1;
+	size_t size = strlen(p_file_name);
+	char *path = realloc(m_target_current_path, m_target_current_path_size + size + 2);
 	if (path == NULL)
 	{
-		printf("target_append_filename_to_target_current_path realloc\n");
+		printf("target_enter_file realloc\n");
 		result = 0;
 	}
 	else
 	{
 		m_target_current_path = path;
-		memcpy(m_target_current_path + m_target_current_path_size, p_filename, filename_size + 1);
-		m_target_current_path_size += filename_size;
+		memcpy(m_target_current_path + m_target_current_path_size, p_file_name, size + 1);
+		m_target_current_path_size += size;
 	}
 	return result;
 }
@@ -212,11 +237,12 @@ target_receive_file()
 	{
 		m_target_current_tm.tm_year -= 1900;
 		m_target_current_tm.tm_mon--;
-		target_append_filename_to_target_current_path(m_target_current_dirent.d_name);
+		target_enter_file(m_target_current_dirent.d_name);
+		printf("%s\n", m_target_current_path);
 		struct stat s;
-		if (stat(m_target_current_path, &s) == -1) // don't use m_target_current_stat; this will destroy the stat of the transfered file
+		if (stat(m_target_current_path, &s) == -1)
 		{
-			if (errno == 2)
+			if (errno == ENOENT)
 			{
 				m_target_file = fopen(m_target_current_path, "w");
 				if (m_target_file == NULL)
@@ -251,17 +277,18 @@ int
 target_receive_path()
 {
 	int result = -1;
-	if (!target_append_path_to_target_current_path((char *)m_transfer_buffer))
+	if (!target_enter_directory((char *)m_transfer_buffer))
 	{
 		printf("target_receive_path target_append_path_to_target_current_path %s\n", (char *)m_transfer_buffer);
 		result = 0;
 	}
 	else
 	{
+		//printf("%s\n", m_target_current_path);
 		struct stat s;
 		if (stat(m_target_current_path, &s) == -1)
 		{
-			if (errno != 2)
+			if (0)//errno != 2)
 			{
 				printf("target_receive_path stat %d %s\n", errno, strerror(errno));
 				result = 0;
@@ -323,26 +350,7 @@ target_file_done()
 int
 target_receive_back()
 {
-	int result = -1;
-	char *tail = m_target_current_path + m_target_current_path_size - 2;
-	while (*tail != '/')
-	{
-		tail--;
-	}
-	size_t size = tail - m_target_current_path + 1;
-	tail = realloc(m_target_current_path, size + 1);
-	if (tail == NULL)
-	{
-		printf("target_receive_back realloc\n");
-		result = 0;
-	}
-	else
-	{
-		m_target_current_path = tail;
-		m_target_current_path_size = size;
-		*(m_target_current_path + m_target_current_path_size) = 0;
-	}
-	return result;
+	return target_leave_directory();
 }
 
 int
@@ -370,12 +378,21 @@ target_receive_data()
 	else
 	{
 		m_target_remaining_size -= transfer_size;
-		if (m_target_remaining_size == 0)
+		/*if (m_target_remaining_size == 0)
 		{
 			fclose(m_target_file);
 			target_file_done();
-		}
+		}*/
 	}
+	return result;
+}
+
+int
+target_receive_done()
+{
+	int result = -1;
+	fclose(m_target_file);
+	target_file_done();
 	return result;
 }
 

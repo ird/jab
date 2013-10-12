@@ -27,6 +27,9 @@ int
 target_receive_file();
 
 int
+target_receive_done();
+
+int
 target_receive_path();
 
 int

@@ -24,6 +24,12 @@ transfer_file_to_target()
 }
 
 int
+transfer_done_to_target()
+{
+	return target_receive_done();
+}
+
+int
 transfer_path_to_target()
 {
 	return target_receive_path();
