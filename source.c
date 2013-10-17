@@ -174,15 +174,15 @@ source_leave_directory()
 		tail--;
 	}
 	size_t size = tail - m_source_current_path + 1;
-	tail = realloc(m_source_current_path, size + 1);
-	if (tail == NULL)
+	char *path = realloc(m_source_current_path, size + 1);
+	if (path == NULL)
 	{
 		printf("source_leave_directory realloc\n");
 		result = 0;
 	}
 	else
 	{
-		m_source_current_path = tail;
+		m_source_current_path = path;
 		m_source_current_path_size = size;
 		*(m_source_current_path + m_source_current_path_size) = 0;
 	}
@@ -219,15 +219,15 @@ source_leave_file()
 		tail--;
 	}
 	size_t size = tail - m_source_current_path + 1;
-	tail = realloc(m_source_current_path, size + 1);
-	if (tail == NULL)
+	char *path = realloc(m_source_current_path, size + 1);
+	if (path == NULL)
 	{
 		printf("source_leave_file realloc\n");
 		result = 0;
 	}
 	else
 	{
-		m_source_current_path = tail;
+		m_source_current_path = path;
 		m_source_current_path_size = size;
 		*(m_source_current_path + m_source_current_path_size) = 0;
 	}
