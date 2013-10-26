@@ -22,14 +22,14 @@ int
 main(int argc, char **argv)
 {
 	int result = -1;
-	if (argc < 3)
+	if (argc < 4)
 	{
-		printf("Usage: backup [source] [target]\n");
+		printf("Usage: backup [source path] [target path] [backup name]\n");
 		result = 0;
 	}
 	else
 	{
-		if (!target_setup(*(argv + 2)))
+		if (!target_setup(*(argv + 2), *(argv + 3)))
 		{
 			result = 0;
 		}

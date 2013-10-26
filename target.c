@@ -33,6 +33,10 @@ char *m_target_base_path;
  */
 size_t m_target_base_path_size;
 
+char *m_target_backup_path;
+
+size_t m_target_backup_path_size;
+
 /*
  * The current path of our backup target.
  */
@@ -57,15 +61,15 @@ FILE *m_target_file;
 char *
 target_target_base_path_plus_path(char *p_path)
 {
-	char *target_base_path_plus_path = NULL;
+	char *path = NULL;
 	size_t path_size = strlen(p_path);
-	target_base_path_plus_path = (char *)malloc(m_target_base_path_size + path_size + 1);
-	if (target_base_path_plus_path != NULL)
+	path = (char *)malloc(m_target_base_path_size + path_size + 1);
+	if (path != NULL)
 	{
-		memcpy(target_base_path_plus_path, m_target_base_path, m_target_base_path_size);
-		memcpy(target_base_path_plus_path + m_target_base_path_size, p_path, path_size + 1);
+		memcpy(path, m_target_base_path, m_target_base_path_size);
+		memcpy(path + m_target_base_path_size, p_path, path_size + 1);
 	}
-	return target_base_path_plus_path;
+	return path;
 }
 
 int
@@ -192,27 +196,96 @@ target_setup_target_base_path(char *p_path)
 	return result;
 }
 
+/*
+ * target_setup should probably be called through transfer.c. target_setup will eventually be running on a different machine as source_setup. While
+ * target_setup and target_source are running in the one process we'll just call target_setup directly.
+ */
 int
-target_setup(char *p_path)
+target_setup(char *p_path, char *p_name)
 {
 	int result = -1;
-	if (!target_setup_target_base_path(p_path))
+	size_t path_size = strlen(p_path);
+	if (path_size && *(p_path + path_size - 1) == '/')
 	{
-		printf("target target_setup_base_path\n");
-		result = 0;
-	}
-	else
-	{
-		m_target_base_path_size = strlen(m_target_base_path);
-		if ((m_target_current_path = malloc(m_target_base_path_size + 1)) == NULL)
+		if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
 		{
-			printf("target_setup malloc\n");
+			printf("target_setup malloc m_target_base_path/\n");
 			result = 0;
 		}
 		else
 		{
-			memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size + 1);
-			m_target_current_path_size = m_target_base_path_size;
+			memcpy(m_target_base_path, p_path, path_size + 1);
+			m_target_base_path_size = path_size;
+		}
+	}
+	else
+	{
+		if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
+		{
+			printf("target_setup malloc m_target_base_path\n");
+			result = 0;
+		}
+		else
+		{
+			memcpy(m_target_base_path, p_path, path_size);
+			*(m_target_base_path + path_size) = '/';
+			*(m_target_base_path + path_size + 1) = 0;
+			m_target_base_path_size = path_size + 1;
+		}
+	}
+	if (result)
+	{
+		size_t name_size = strlen(p_name);
+		if (name_size && *(p_name + name_size - 1) == '/')
+		{
+			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + name_size + 1)) == NULL)
+			{
+				printf("target_setup malloc m_target_backup_path/\n");
+				result = 0;
+			}
+			else
+			{
+				memcpy(m_target_backup_path, m_target_base_path, m_target_base_path_size);
+				memcpy(m_target_backup_path + m_target_base_path_size, p_name, name_size + 1);
+				m_target_backup_path_size = m_target_base_path_size + name_size;
+			}
+		}
+		else
+		{
+			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + name_size + 2)) == NULL)
+			{
+				printf("target_setup malloc m_target_backup_path\n");
+				result = 0;
+			}
+			else
+			{
+				memcpy(m_target_backup_path, m_target_base_path, m_target_base_path_size);
+				memcpy(m_target_backup_path + m_target_base_path_size, p_name, name_size);
+				*(m_target_backup_path + m_target_base_path_size + name_size) = '/';
+				*(m_target_backup_path + m_target_base_path_size + name_size + 1) = 0;
+				m_target_backup_path_size = m_target_base_path_size + name_size + 1;
+			}
+		}
+		if (result)
+		{
+			if ((m_target_current_path = malloc(m_target_backup_path_size + 1)) == NULL)
+			{
+				printf("target_setup malloc m_target_current_path\n");
+				result = 0;
+			}
+			else
+			{
+				memcpy(m_target_current_path, m_target_backup_path, m_target_backup_path_size + 1);
+				m_target_current_path_size = m_target_backup_path_size;
+			}
+			if (!result)
+			{
+				free(m_target_backup_path);
+			}
+		}
+		if (!result)
+		{
+			free(m_target_base_path);
 		}
 	}
 	return result;

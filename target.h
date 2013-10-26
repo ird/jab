@@ -18,7 +18,7 @@ char *
 target_target_base_path_plus_path(char *p_path);
 
 int
-target_setup(char *p_path);
+target_setup(char *p_path, char *p_name);
 
 int
 target_cleanup();
