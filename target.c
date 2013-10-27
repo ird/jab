@@ -65,15 +65,15 @@ off_t m_target_remaining_size;
 FILE *m_target_file;
 
 char *
-target_target_base_path_plus_path(char *p_path)
+target_target_base_path_plus_filename(char *p_filename)
 {
 	char *path = NULL;
-	size_t path_size = strlen(p_path);
+	size_t path_size = strlen(p_filename);
 	path = (char *)malloc(m_target_base_path_size + path_size + 1);
 	if (path != NULL)
 	{
 		memcpy(path, m_target_base_path, m_target_base_path_size);
-		memcpy(path + m_target_base_path_size, p_path, path_size + 1);
+		memcpy(path + m_target_base_path_size, p_filename, path_size + 1);
 	}
 	return path;
 }
@@ -208,42 +208,62 @@ target_setup(char *p_path, char *p_name)
 	}
 	if (result)
 	{
-		// TODO: name must not be empty or contain a /.
-		m_target_name_size = strlen(p_name);
-		if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+		struct stat s;
+		if (stat(m_target_base_path, &s) == -1)
 		{
-			printf("target_setup malloc m_target_name\n");
-			result = 0;
-		}
-		else
-		{
-			memcpy(m_target_name, p_name, m_target_name_size + 1);
-			if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
+			if (errno == ENOENT)
 			{
-				printf("target_setup malloc m_target_current_path\n");
+				if (mkdir(m_target_base_path, 0700) == -1)
+				{
+					printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_base_path);
+					result = 0;
+				}
+			}
+			else
+			{
+				printf("target_setup stat %d %s %s\n", errno, strerror(errno), m_target_base_path);
+				result = 0;
+			}
+		}
+		if (result)
+		{
+			// TODO: name must not be empty or contain a /.
+			m_target_name_size = strlen(p_name);
+			if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+			{
+				printf("target_setup malloc m_target_name\n");
 				result = 0;
 			}
 			else
 			{
-				memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
-				memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
-				*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
-				*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
-				m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
-				m_target_current_path_offset = m_target_current_path_size;
-				if (mkdir(m_target_current_path, 0700) == -1)
+				memcpy(m_target_name, p_name, m_target_name_size + 1);
+				if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
 				{
-					printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+					printf("target_setup malloc m_target_current_path\n");
 					result = 0;
+				}
+				else
+				{
+					memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
+					memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
+					*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
+					*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
+					m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
+					m_target_current_path_offset = m_target_current_path_size;
+					if (mkdir(m_target_current_path, 0700) == -1)
+					{
+						printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+						result = 0;
+					}
+					if (!result)
+					{
+						free(m_target_current_path);
+					}
 				}
 				if (!result)
 				{
-					free(m_target_current_path);
+					free(m_target_name);
 				}
-			}
-			if (!result)
-			{
-				free(m_target_name);
 			}
 		}
 		if (!result)
@@ -300,7 +320,7 @@ target_receive_file()
 		m_target_current_tm.tm_year -= 1900;
 		m_target_current_tm.tm_mon--;
 		target_enter_file(m_target_current_dirent.d_name);
-		printf("%s\n", m_target_current_path);
+		//printf("%s\n", m_target_current_path);
 		struct stat s;
 		if (stat(m_target_current_path, &s) == -1)
 		{

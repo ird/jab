@@ -15,7 +15,7 @@
 #define TARGET_H_
 
 char *
-target_target_base_path_plus_path(char *p_path);
+target_target_base_path_plus_filename(char *p_filename);
 
 int
 target_setup(char *p_path, char *p_name);

@@ -39,12 +39,18 @@ main(int argc, char **argv)
 			{
 				result = 0;
 			}
+			else if (!database_begin_transaction())
+			{
+				result = 0;
+			}
 			else if (!source(*(argv + 1)))
 			{
+				database_rollback_transaction();
 				result = 0;
 			}
 			else
 			{
+				database_commit_transaction();
 				printf("Directories found:   %lu\n", m_source_directories_found);
 				printf("Directories skipped: %lu\n", m_source_directories_skipped);
 				printf("Files found:         %lu\n", m_source_files_found);

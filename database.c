@@ -322,7 +322,7 @@ database_open()
 {
 	int result = -1;
 	char *filename;
-	if ((filename = target_target_base_path_plus_path("backup.sqlite3")) == NULL)
+	if ((filename = target_target_base_path_plus_filename("backup.sqlite3")) == NULL)
 	{
 		result = 0;
 	}

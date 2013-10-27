@@ -262,7 +262,7 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 	}
 	else
 	{
-		printf("          %s\n", p_filename);
+		//printf("          %s\n", p_filename);
 		if (!source_format_file(p_stat, p_dirent))
 		{
 			printf("source_process_isreg source_format_file\n");
