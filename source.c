@@ -435,9 +435,9 @@ source_process_dirent(struct dirent *p_dirent)
 		struct stat stat;
 		if (lstat(filename, &stat) == -1)
 		{
-			if (errno != EACCES)
+			if (errno != EACCES && errno != 75) // Value too large for defined data type
 			{
-				printf("source_process_dirent lstat %d %s%s \n", errno, strerror(errno), filename);
+				printf("source_process_dirent lstat %d %s %s \n", errno, strerror(errno), filename);
 				result = 0;
 			}
 		}
