@@ -231,6 +231,15 @@ target_setup(char *p_path, char *p_name)
 				*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
 				m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
 				m_target_current_path_offset = m_target_current_path_size;
+				if (mkdir(m_target_current_path, 0700) == -1)
+				{
+					printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+					result = 0;
+				}
+				if (!result)
+				{
+					free(m_target_current_path);
+				}
 			}
 			if (!result)
 			{
