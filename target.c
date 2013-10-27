@@ -39,10 +39,6 @@ char *m_target_base_path;
  */
 size_t m_target_base_path_size;
 
-char *m_target_backup_path;
-
-size_t m_target_backup_path_size;
-
 /*
  * The current path of our backup target.
  */
@@ -54,9 +50,7 @@ char *m_target_current_path;
  */
 size_t m_target_current_path_size;
 
-char *m_target_current_tail;
-
-size_t m_target_current_tail_offset;
+size_t m_target_current_path_offset;
 
 struct stat m_target_current_stat;
 
@@ -102,7 +96,6 @@ target_enter_directory(char *p_directory_name)
 		*(m_target_current_path + m_target_current_path_size + size) = '/';
 		*(m_target_current_path + m_target_current_path_size + size + 1) = 0;
 		m_target_current_path_size += size + 1;
-		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -128,7 +121,6 @@ target_leave_directory()
 		m_target_current_path = path;
 		m_target_current_path_size = size;
 		*(m_target_current_path + m_target_current_path_size) = 0;
-		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -149,7 +141,6 @@ target_enter_file(char *p_file_name)
 		m_target_current_path = path;
 		memcpy(m_target_current_path + m_target_current_path_size, p_file_name, size + 1);
 		m_target_current_path_size += size;
-		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -175,7 +166,6 @@ target_leave_file()
 		m_target_current_path = path;
 		m_target_current_path_size = size;
 		*(m_target_current_path + m_target_current_path_size) = 0;
-		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -218,8 +208,8 @@ target_setup(char *p_path, char *p_name)
 	}
 	if (result)
 	{
-		m_target_name_size = strlen(p_name);
 		// TODO: name must not be empty or contain a /.
+		m_target_name_size = strlen(p_name);
 		if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
 		{
 			printf("target_setup malloc m_target_name\n");
@@ -228,37 +218,19 @@ target_setup(char *p_path, char *p_name)
 		else
 		{
 			memcpy(m_target_name, p_name, m_target_name_size + 1);
-			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
+			if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
 			{
-				printf("target_setup malloc m_target_backup_path\n");
+				printf("target_setup malloc m_target_current_path\n");
 				result = 0;
 			}
 			else
 			{
-				memcpy(m_target_backup_path, m_target_base_path, m_target_base_path_size);
-				memcpy(m_target_backup_path + m_target_base_path_size, m_target_name, m_target_name_size);
-				*(m_target_backup_path + m_target_base_path_size + m_target_name_size) = '/';
-				*(m_target_backup_path + m_target_base_path_size + m_target_name_size + 1) = 0;
-				m_target_backup_path_size = m_target_base_path_size + m_target_name_size + 1;
-			}
-			if (result)
-			{
-				if ((m_target_current_path = malloc(m_target_backup_path_size + 1)) == NULL)
-				{
-					printf("target_setup malloc m_target_current_path\n");
-					result = 0;
-				}
-				else
-				{
-					memcpy(m_target_current_path, m_target_backup_path, m_target_backup_path_size + 1);
-					m_target_current_path_size = m_target_backup_path_size;
-					m_target_current_tail_offset = m_target_current_path_size;
-					m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
-				}
-				if (!result)
-				{
-					free(m_target_backup_path);
-				}
+				memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
+				memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
+				*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
+				*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
+				m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
+				m_target_current_path_offset = m_target_current_path_size;
 			}
 			if (!result)
 			{
@@ -387,7 +359,7 @@ target_receive_file()
 					}
 					else
 					{
-						if (!database_bind_text(stmt, ":path", m_target_current_tail))
+						if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
 						{
 							result = 0;
 						}
@@ -437,7 +409,6 @@ target_receive_path()
 	}
 	else
 	{
-		//printf("%s\n", m_target_current_path);
 		struct stat s;
 		if (stat(m_target_current_path, &s) == -1)
 		{
@@ -617,7 +588,7 @@ target_receive_done()
 			{
 				result = 0;
 			}
-			else if (!database_bind_text(stmt, ":path", m_target_current_tail))
+			else if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
 			{
 				result = 0;
 			}
