@@ -259,6 +259,7 @@ target_cleanup()
 {
 	int result = -1;
 	free(m_target_base_path);
+	free(m_target_name);
 	free(m_target_current_path);
 	return result;
 }
