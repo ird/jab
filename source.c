@@ -49,79 +49,14 @@ int
 source_format_file(struct stat *p_stat, struct dirent *p_dirent)
 {
 	int result = -1;
-	struct tm *tm;
-	if ((tm = gmtime((time_t *)&p_stat->st_mtim)) == NULL)
-	{
-		result = 0;
-	}
-	else
-	{
-		int size =
-			snprintf
-			(
-				(void *)&m_transfer_buffer,
-				TRANSFER_BUFFER_SIZE,
-				"0%o %d %d %lu %04d-%02d-%02d %02d:%02d:%02d %s\n",
-				p_stat->st_mode,
-				p_stat->st_uid,
-				p_stat->st_gid,
-				p_stat->st_size,
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec,
-				p_dirent->d_name
-			);
-		if (size < 0)
-		{
-			result = 0;
-		}
-		else if (size >= TRANSFER_BUFFER_SIZE)
-		{
-			result = 0;
-		}
-	}
+	strcpy((char *)m_transfer_buffer, p_dirent->d_name);
 	return result;
 }
 int
 source_format_path(struct stat *p_stat, struct dirent *p_dirent)
 {
 	int result = -1;
-	/*struct tm *tm;
-	if ((tm = gmtime((time_t *)&p_stat->st_mtim)) == NULL)
-	{
-		result = 0;
-	}
-	else
-	{
-		*/int size =
-			snprintf
-			(
-				(void *)&m_transfer_buffer,
-				TRANSFER_BUFFER_SIZE,
-				/*"0%o %d %d %04d-%02d-%02d %02d:%02d:%02d */"%s\n",
-				/*p_stat->st_mode,
-				p_stat->st_uid,
-				p_stat->st_gid,
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec,
-				*/p_dirent->d_name
-			);
-		if (size < 0)
-		{
-			result = 0;
-		}
-		else if (size >= TRANSFER_BUFFER_SIZE)
-		{
-			result = 0;
-		}
-	//}
+	strcpy((char *)m_transfer_buffer, p_dirent->d_name);
 	return result;
 }
 
@@ -262,7 +197,6 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 	}
 	else
 	{
-		//printf("          %s\n", p_filename);
 		if (!source_format_file(p_stat, p_dirent))
 		{
 			printf("source_process_isreg source_format_file\n");
@@ -435,6 +369,9 @@ source_process_dirent(struct dirent *p_dirent)
 		struct stat stat;
 		if (lstat(filename, &stat) == -1)
 		{
+			/*
+			 * My Raspberry Pi had a bit of an issue stating a 2.5GB file so I'll just skip over "Value too large for defined data type" for the mean time.
+			 */
 			if (errno != EACCES && errno != 75) // Value too large for defined data type
 			{
 				printf("source_process_dirent lstat %d %s %s \n", errno, strerror(errno), filename);

@@ -18,23 +18,13 @@
 #include "source.h"
 #include "target.h"
 
-/*
- * ISSUES
- * ======
- * Target filenames with spaces aren't begin created correctly. Example "this is a file.txt" is being created as "this".
- * source_process_dirent lstat Value too large for defined data type
- * source_process_dirent lstat 75 Value too large for defined data type \
- *   /media/00615002-0d48-4585-bfc6-cf373a1293ce/samba/homes/stacey/Archive/Outlook/stacey.richards@ird.co.nz.ost
- * ls -l /media/00615002-0d48-4585-bfc6-cf373a1293ce/samba/homes/stacey/Archive/Outlook/stacey.richards@ird.co.nz.ost
- * -rwxr-xr-x 1 root root 2575598592 Dec  5  2012 /media/00615002-0d48-4585-bfc6-cf373a1293ce/samba/homes/stacey/Archive/Outlook/stacey.richards@ird.co.nz.ost
- */
 int
 main(int argc, char **argv)
 {
 	int result = -1;
 	if (argc < 4)
 	{
-		printf("Usage: backup [source path] [target path] [backup name]\n");
+		printf("Usage: backup {source_path} {target_path} {backup_name}\n");
 		result = 0;
 	}
 	else

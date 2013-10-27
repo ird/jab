@@ -288,139 +288,25 @@ int
 target_receive_file()
 {
 	int result = -1;
-	int input_items_matched =
-		sscanf
-		(
-			(char *)m_transfer_buffer,
-			"0%o %d %d %lu %04d-%02d-%02d %02d:%02d:%02d %s\n",
-			&m_target_current_stat.st_mode,
-			&m_target_current_stat.st_uid,
-			&m_target_current_stat.st_gid,
-			&m_target_current_stat.st_size,
-			&m_target_current_tm.tm_year,// + 1900,
-			&m_target_current_tm.tm_mon,// + 1,
-			&m_target_current_tm.tm_mday,
-			&m_target_current_tm.tm_hour,
-			&m_target_current_tm.tm_min,
-			&m_target_current_tm.tm_sec,
-			m_target_current_dirent.d_name
-		);
-	if (input_items_matched == EOF)
+	strcpy(m_target_current_dirent.d_name, (char *)m_transfer_buffer);
+	target_enter_file(m_target_current_dirent.d_name);
+	struct stat s;
+	if (stat(m_target_current_path, &s) == -1)
 	{
-		printf("target_receive_file sscanf EOF\n");
-		result = 0;
-	}
-	else if (input_items_matched < 11)
-	{
-		printf("target_receive_file sscanf\n");
-		result = 0;
-	}
-	else
-	{
-		m_target_current_tm.tm_year -= 1900;
-		m_target_current_tm.tm_mon--;
-		target_enter_file(m_target_current_dirent.d_name);
-		//printf("%s\n", m_target_current_path);
-		struct stat s;
-		if (stat(m_target_current_path, &s) == -1)
+		if (errno == ENOENT)
 		{
-			if (errno == ENOENT)
-			{
-				memcpy(m_transfer_buffer, "HASH\n\0", 6);
-			}
-			else
-			{
-				printf("target stat error: %d %s\n", errno, strerror(errno));
-				result = 0;
-			}
+			memcpy(m_transfer_buffer, "HASH\n\0", 6);
 		}
 		else
 		{
-			struct tm *tm;
-			if ((tm = gmtime((time_t *)&(s.st_mtim))) == NULL)
-			{
-				result = 0;
-			}
-			else
-			{
-				if
-				(
-					s.st_size == m_target_current_stat.st_size &&
-					tm->tm_year == m_target_current_tm.tm_year &&
-					tm->tm_mon == m_target_current_tm.tm_mon &&
-					tm->tm_mday == m_target_current_tm.tm_mday &&
-					tm->tm_hour == m_target_current_tm.tm_hour &&
-					tm->tm_min == m_target_current_tm.tm_min &&
-					tm->tm_sec == m_target_current_tm.tm_sec
-				)
-				{
-					if (s.st_mode != m_target_current_stat.st_mode)
-					{
-						if (chmod(m_target_current_path, m_target_current_stat.st_mode) == -1)
-						{
-							printf("target_receive_file chmod\n");
-							result = 0;
-						}
-						else if (s.st_uid != m_target_current_stat.st_uid || s.st_gid != m_target_current_stat.st_gid)
-						{
-							if (chown(m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid) == -1)
-							{
-								printf("target_receive_file chown\n");
-								result = 0;
-							}
-						}
-					}
-					memcpy(m_transfer_buffer, "DONE\n\0", 6);
-					if (!target_leave_file())
-					{
-						printf("target_receive_file target_leave_file\n");
-						result = 0;
-					}
-				}
-				else
-				{
-					// TODO: Check the database for a file with the same name, size, and date/time. If found, assume it's the same file (unless a hash check is
-					// specified as required for existing files as a command line parameter.
-					const unsigned char *tail;
-					sqlite3_stmt *stmt;
-					if (!database_prepare("select file.hash hash, file.path path from file where file.path = :path", &stmt))
-					{
-						result = 0;
-					}
-					else
-					{
-						if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
-						{
-							result = 0;
-						}
-						else
-						{
-							int rc = sqlite3_step(stmt);
-							if (rc == SQLITE_DONE)
-							{
-								tail = NULL;
-							}
-							else if (rc == SQLITE_ROW)
-							{
-								tail = sqlite3_column_text(stmt, 0);
-								if (tail == NULL)
-								{
-									result = 0;
-								}
-								else
-								{
-								}
-							}
-							else
-							{
-								result = 0;
-							}
-						}
-						sqlite3_finalize(stmt);
-					}
-				}
-			}
+			printf("target stat error: %d %s\n", errno, strerror(errno));
+			result = 0;
 		}
+	}
+	else
+	{
+		printf("target_receive_file file exists %s\n", m_target_current_path);
+		result = 0;
 	}
 	return result;
 }
