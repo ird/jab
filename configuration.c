@@ -70,12 +70,9 @@ configuration_update_int(const char *p_key, int p_value)
 		{
 			result = 0;
 		}
-		else
+		else if (sqlite3_step(stmt) != SQLITE_DONE)
 		{
-			if (sqlite3_step(stmt) != SQLITE_DONE)
-			{
-				result = 0;
-			}
+			result = 0;
 		}
 		sqlite3_finalize(stmt);
 	}
@@ -101,12 +98,9 @@ configuration_insert_int(const char *p_key, int p_value)
 		{
 			result = 0;
 		}
-		else
+		else if (sqlite3_step(stmt) != SQLITE_DONE)
 		{
-			if (sqlite3_step(stmt) != SQLITE_DONE)
-			{
-				result = 0;
-			}
+			result = 0;
 		}
 		sqlite3_finalize(stmt);
 	}
@@ -130,12 +124,9 @@ configuration_set_int(const char *p_key, int p_value)
 			{
 				result = 0;
 			}
-			else
+			else if (sqlite3_step(stmt) != SQLITE_DONE)
 			{
-				if (sqlite3_step(stmt) != SQLITE_DONE)
-				{
-					result = 0;
-				}
+				result = 0;
 			}
 			sqlite3_finalize(stmt);
 		}

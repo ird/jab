@@ -277,6 +277,8 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 		{
 			if (strcmp((char *)m_transfer_buffer, "DONE\n") == 0)
 			{
+				printf("source_process_isreg DONE\n");
+				result = 0;
 			}
 			else if (strcmp((char *)m_transfer_buffer, "HASH\n") == 0)
 			{
@@ -292,51 +294,57 @@ source_process_isreg(struct dirent *p_dirent, struct stat *p_stat, char *p_filen
 						printf("source_process_isreg transfer_hash_to_target\n");
 						result = 0;
 					}
-					else
+					else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
 					{
+						off_t remaining_size = p_stat->st_size;
+						size_t transfer_size = TRANSFER_BUFFER_SIZE;
+						while (remaining_size)
+						{
+							// TODO: Comparing off_t with size_t?
+							if (remaining_size < transfer_size)
+							{
+								transfer_size = remaining_size;
+							}
+							size_t bytes_read = fread(m_transfer_buffer, 1, transfer_size, file);
+							if (bytes_read < transfer_size)
+							{
+								printf("source_process_isreg fread\n");
+								result = 0;
+								break;
+							}
+							else
+							{
+								if (!transfer_data_to_target())
+								{
+									printf("source_process_isreg transfer_data_to_target\n");
+									result = 0;
+									break;
+								}
+								else
+								{
+									remaining_size -= transfer_size;
+								}
+							}
+						}
+						if (result)
+						{
+							if (!transfer_done_to_target())
+							{
+								printf("source_process_isreg transfer_done_to_target\n");
+								result = 0;
+							}
+						}
 					}
 				}
 			}
 			else if (strcmp((char *)m_transfer_buffer, "DATA\n") == 0)
 			{
-				off_t remaining_size = p_stat->st_size;
-				size_t transfer_size = TRANSFER_BUFFER_SIZE;
-				while (remaining_size)
-				{
-					// TODO: Comparing off_t with size_t? Work on this you lazy shit.
-					if (remaining_size < transfer_size)
-					{
-						transfer_size = remaining_size;
-					}
-					size_t bytes_read = fread(m_transfer_buffer, 1, transfer_size, file);
-					if (bytes_read < transfer_size)
-					{
-						printf("source_process_isreg fread\n");
-						result = 0;
-						break;
-					}
-					else
-					{
-						if (!transfer_data_to_target())
-						{
-							printf("source_process_isreg transfer_data_to_target\n");
-							result = 0;
-							break;
-						}
-						else
-						{
-							remaining_size -= transfer_size;
-						}
-					}
-				}
-				if (!transfer_done_to_target())
-				{
-					printf("source_process_isreg transfer_done_to_target\n");
-					result = 0;
-				}
+				printf("source_process_isreg DATA\n");
+				result = 0;
 			}
 			else if (strcmp((char *)m_transfer_buffer, "STOP\n") == 0)
 			{
+				printf("source_process_isreg STOP\n");
 				result = 0;
 			}
 		}

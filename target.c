@@ -18,9 +18,15 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <time.h>
+#include <unistd.h>
 
 #include "database.h"
+#include "hash.h"
 #include "transfer.h"
+
+char *m_target_name;
+
+size_t m_target_name_size;
 
 /*
  * The base path of our backup target. m_target_base_path always has a trailing /.
@@ -48,11 +54,17 @@ char *m_target_current_path;
  */
 size_t m_target_current_path_size;
 
+char *m_target_current_tail;
+
+size_t m_target_current_tail_offset;
+
 struct stat m_target_current_stat;
 
 struct tm m_target_current_tm;
 
 struct dirent m_target_current_dirent;
+
+char m_target_current_hash[SHA1_STRING_SIZE + 1];
 
 off_t m_target_remaining_size;
 
@@ -90,6 +102,7 @@ target_enter_directory(char *p_directory_name)
 		*(m_target_current_path + m_target_current_path_size + size) = '/';
 		*(m_target_current_path + m_target_current_path_size + size + 1) = 0;
 		m_target_current_path_size += size + 1;
+		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -115,6 +128,7 @@ target_leave_directory()
 		m_target_current_path = path;
 		m_target_current_path_size = size;
 		*(m_target_current_path + m_target_current_path_size) = 0;
+		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -135,6 +149,7 @@ target_enter_file(char *p_file_name)
 		m_target_current_path = path;
 		memcpy(m_target_current_path + m_target_current_path_size, p_file_name, size + 1);
 		m_target_current_path_size += size;
+		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
@@ -160,42 +175,10 @@ target_leave_file()
 		m_target_current_path = path;
 		m_target_current_path_size = size;
 		*(m_target_current_path + m_target_current_path_size) = 0;
+		m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
 	}
 	return result;
 }
-
-int
-target_setup_target_base_path(char *p_path)
-{
-	int result = -1;
-	size_t path_size = strlen(p_path);
-	if (path_size && *(p_path + path_size - 1) != '/')
-	{
-		if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
-		{
-			result = 0;
-		}
-		else
-		{
-			memcpy(m_target_base_path, p_path, path_size);
-			*(m_target_base_path + path_size) = '/';
-			*(m_target_base_path + path_size + 1) = 0;
-		}
-	}
-	else
-	{
-		if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
-		{
-			result = 0;
-		}
-		else
-		{
-			memcpy(m_target_base_path, p_path, path_size + 1);
-		}
-	}
-	return result;
-}
-
 /*
  * target_setup should probably be called through transfer.c. target_setup will eventually be running on a different machine as source_setup. While
  * target_setup and target_source are running in the one process we'll just call target_setup directly.
@@ -235,24 +218,17 @@ target_setup(char *p_path, char *p_name)
 	}
 	if (result)
 	{
-		size_t name_size = strlen(p_name);
-		if (name_size && *(p_name + name_size - 1) == '/')
+		m_target_name_size = strlen(p_name);
+		// TODO: name must not be empty or contain a /.
+		if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
 		{
-			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + name_size + 1)) == NULL)
-			{
-				printf("target_setup malloc m_target_backup_path/\n");
-				result = 0;
-			}
-			else
-			{
-				memcpy(m_target_backup_path, m_target_base_path, m_target_base_path_size);
-				memcpy(m_target_backup_path + m_target_base_path_size, p_name, name_size + 1);
-				m_target_backup_path_size = m_target_base_path_size + name_size;
-			}
+			printf("target_setup malloc m_target_name\n");
+			result = 0;
 		}
 		else
 		{
-			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + name_size + 2)) == NULL)
+			memcpy(m_target_name, p_name, m_target_name_size + 1);
+			if ((m_target_backup_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
 			{
 				printf("target_setup malloc m_target_backup_path\n");
 				result = 0;
@@ -260,27 +236,33 @@ target_setup(char *p_path, char *p_name)
 			else
 			{
 				memcpy(m_target_backup_path, m_target_base_path, m_target_base_path_size);
-				memcpy(m_target_backup_path + m_target_base_path_size, p_name, name_size);
-				*(m_target_backup_path + m_target_base_path_size + name_size) = '/';
-				*(m_target_backup_path + m_target_base_path_size + name_size + 1) = 0;
-				m_target_backup_path_size = m_target_base_path_size + name_size + 1;
+				memcpy(m_target_backup_path + m_target_base_path_size, m_target_name, m_target_name_size);
+				*(m_target_backup_path + m_target_base_path_size + m_target_name_size) = '/';
+				*(m_target_backup_path + m_target_base_path_size + m_target_name_size + 1) = 0;
+				m_target_backup_path_size = m_target_base_path_size + m_target_name_size + 1;
 			}
-		}
-		if (result)
-		{
-			if ((m_target_current_path = malloc(m_target_backup_path_size + 1)) == NULL)
+			if (result)
 			{
-				printf("target_setup malloc m_target_current_path\n");
-				result = 0;
-			}
-			else
-			{
-				memcpy(m_target_current_path, m_target_backup_path, m_target_backup_path_size + 1);
-				m_target_current_path_size = m_target_backup_path_size;
+				if ((m_target_current_path = malloc(m_target_backup_path_size + 1)) == NULL)
+				{
+					printf("target_setup malloc m_target_current_path\n");
+					result = 0;
+				}
+				else
+				{
+					memcpy(m_target_current_path, m_target_backup_path, m_target_backup_path_size + 1);
+					m_target_current_path_size = m_target_backup_path_size;
+					m_target_current_tail_offset = m_target_current_path_size;
+					m_target_current_tail = m_target_current_path + m_target_current_tail_offset;
+				}
+				if (!result)
+				{
+					free(m_target_backup_path);
+				}
 			}
 			if (!result)
 			{
-				free(m_target_backup_path);
+				free(m_target_name);
 			}
 		}
 		if (!result)
@@ -342,17 +324,7 @@ target_receive_file()
 		{
 			if (errno == ENOENT)
 			{
-				m_target_file = fopen(m_target_current_path, "w");
-				if (m_target_file == NULL)
-				{
-					printf("target_receive_file fopen %d %s %s\n", errno, strerror(errno), m_target_current_path);
-					result = 0;
-				}
-				else
-				{
-					m_target_remaining_size = m_target_current_stat.st_size;
-					memcpy(m_transfer_buffer, "DATA\n\0", 6);
-				}
+				memcpy(m_transfer_buffer, "HASH\n\0", 6);
 			}
 			else
 			{
@@ -362,11 +334,89 @@ target_receive_file()
 		}
 		else
 		{
-			memcpy(m_transfer_buffer, "DONE\n\0", 6);
-			if (!target_leave_file())
+			struct tm *tm;
+			if ((tm = gmtime((time_t *)&(s.st_mtim))) == NULL)
 			{
-				printf("target_receive_file target_leave_file\n");
 				result = 0;
+			}
+			else
+			{
+				if
+				(
+					s.st_size == m_target_current_stat.st_size &&
+					tm->tm_year == m_target_current_tm.tm_year &&
+					tm->tm_mon == m_target_current_tm.tm_mon &&
+					tm->tm_mday == m_target_current_tm.tm_mday &&
+					tm->tm_hour == m_target_current_tm.tm_hour &&
+					tm->tm_min == m_target_current_tm.tm_min &&
+					tm->tm_sec == m_target_current_tm.tm_sec
+				)
+				{
+					if (s.st_mode != m_target_current_stat.st_mode)
+					{
+						if (chmod(m_target_current_path, m_target_current_stat.st_mode) == -1)
+						{
+							printf("target_receive_file chmod\n");
+							result = 0;
+						}
+						else if (s.st_uid != m_target_current_stat.st_uid || s.st_gid != m_target_current_stat.st_gid)
+						{
+							if (chown(m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid) == -1)
+							{
+								printf("target_receive_file chown\n");
+								result = 0;
+							}
+						}
+					}
+					memcpy(m_transfer_buffer, "DONE\n\0", 6);
+					if (!target_leave_file())
+					{
+						printf("target_receive_file target_leave_file\n");
+						result = 0;
+					}
+				}
+				else
+				{
+					// TODO: Check the database for a file with the same name, size, and date/time. If found, assume it's the same file (unless a hash check is
+					// specified as required for existing files as a command line parameter.
+					const unsigned char *tail;
+					sqlite3_stmt *stmt;
+					if (!database_prepare("select file.hash hash, file.path path from file where file.path = :path", &stmt))
+					{
+						result = 0;
+					}
+					else
+					{
+						if (!database_bind_text(stmt, ":path", m_target_current_tail))
+						{
+							result = 0;
+						}
+						else
+						{
+							int rc = sqlite3_step(stmt);
+							if (rc == SQLITE_DONE)
+							{
+								tail = NULL;
+							}
+							else if (rc == SQLITE_ROW)
+							{
+								tail = sqlite3_column_text(stmt, 0);
+								if (tail == NULL)
+								{
+									result = 0;
+								}
+								else
+								{
+								}
+							}
+							else
+							{
+								result = 0;
+							}
+						}
+						sqlite3_finalize(stmt);
+					}
+				}
 			}
 		}
 	}
@@ -435,6 +485,87 @@ int
 target_receive_hash()
 {
 	int result = -1;
+	strcpy(m_target_current_hash, (char *)m_transfer_buffer);
+	const unsigned char *name;
+	const unsigned char *path;
+	sqlite3_stmt *stmt;
+	if (!database_prepare("select file.name name, file.path path from file where file.hash = :hash", &stmt))
+	{
+		result = 0;
+	}
+	else
+	{
+		if (!database_bind_text(stmt, ":hash", (const char *)m_transfer_buffer))
+		{
+			result = 0;
+		}
+		else
+		{
+			int rc = sqlite3_step(stmt);
+			if (rc == SQLITE_DONE)
+			{
+				m_target_file = fopen(m_target_current_path, "w");
+				if (m_target_file == NULL)
+				{
+					printf("target_receive_hash fopen %d %s %s\n", errno, strerror(errno), m_target_current_path);
+					result = 0;
+				}
+				else
+				{
+					m_target_remaining_size = m_target_current_stat.st_size;
+					memcpy(m_transfer_buffer, "DATA\n\0", 6);
+				}
+			}
+			else if (rc == SQLITE_ROW)
+			{
+				if ((name = sqlite3_column_text(stmt, 0)) == NULL)
+				{
+					result = 0;
+				}
+				else if ((path = sqlite3_column_text(stmt, 1)) == NULL)
+				{
+					result = 0;
+				}
+				else
+				{
+					size_t name_size = strlen((const char *)name);
+					size_t path_size = strlen((const char *)path);
+					char *existing_path = malloc(m_target_base_path_size + name_size + 1 + path_size + 1);
+					if (existing_path == NULL)
+					{
+						printf("target_receive_hash malloc\n");
+						result = 0;
+					}
+					else
+					{
+						memcpy(existing_path, m_target_base_path, m_target_base_path_size);
+						memcpy(existing_path + m_target_base_path_size, name, name_size);
+						*(existing_path + m_target_base_path_size + name_size) = '/';
+						memcpy(existing_path + m_target_base_path_size + name_size + 1, path, path_size + 1);
+						if (link(existing_path, m_target_current_path) == -1)
+						{
+							printf("target_receive_hash link %d %s %s %s\n", errno, strerror(errno), existing_path, m_target_current_path);
+							result = 0;
+						}
+						else if (!target_leave_file())
+						{
+							printf("target_receive_hash target_leave_file\n");
+							result = 0;
+						}
+						else
+						{
+							memcpy(m_transfer_buffer, "DONE\n\0", 6);
+						}
+					}
+				}
+			}
+			else
+			{
+				result = 0;
+			}
+		}
+		sqlite3_finalize(stmt);
+	}
 	return result;
 }
 
@@ -469,10 +600,39 @@ target_receive_done()
 		printf("target_receive_done fclose %d %s %s\n", errno, strerror(errno), m_target_current_path);
 		result = 0;
 	}
-	else if (!target_leave_file())
+	else
 	{
-		printf("target_receive_done target_leave_file\n");
-		result = 0;
+		sqlite3_stmt *stmt;
+		if (!database_prepare("insert into file (hash, name, path) values (:hash, :name, :path)", &stmt))
+		{
+			result = 0;
+		}
+		else
+		{
+			if (!database_bind_text(stmt, ":hash", m_target_current_hash))
+			{
+				result = 0;
+			}
+			else if (!database_bind_text(stmt, ":name", m_target_name))
+			{
+				result = 0;
+			}
+			else if (!database_bind_text(stmt, ":path", m_target_current_tail))
+			{
+				result = 0;
+			}
+			else if (sqlite3_step(stmt) != SQLITE_DONE)
+			{
+				result = 0;
+			}
+			sqlite3_finalize(stmt);
+		}
+
+		if (!target_leave_file())
+		{
+			printf("target_receive_done target_leave_file\n");
+			result = 0;
+		}
 	}
 	return result;
 }

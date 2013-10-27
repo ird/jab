@@ -279,7 +279,7 @@ database_upgrade(sqlite3 *db)
 		{
 			if (database_version == 0)
 			{
-				result = database_execute("CREATE TABLE file (hash text not null default '', path text not null default '')");
+				result = database_execute("CREATE TABLE file (hash text not null default '', name text not null default '', path text not null default '')");
 				database_version++;
 			}
 			if (result && database_version == 1)
@@ -288,6 +288,11 @@ database_upgrade(sqlite3 *db)
 				database_version++;
 			}
 			if (result && database_version == 2)
+			{
+				result = database_execute("CREATE INDEX file_name on file (name)");
+				database_version++;
+			}
+			if (result && database_version == 3)
 			{
 				result = database_execute("CREATE INDEX file_path on file (path)");
 				database_version++;

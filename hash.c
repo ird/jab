@@ -17,8 +17,6 @@
 
 #include "hash.h"
 
-const size_t SHA1_STRING_SIZE = SHA_DIGEST_LENGTH * 2;
-
 int
 hash_file_to_string(const char *p_path, char *p_hash_string)
 {

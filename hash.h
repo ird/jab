@@ -16,7 +16,7 @@
 
 #include <openssl/sha.h>
 
-extern const size_t SHA1_STRING_SIZE;
+#define SHA1_STRING_SIZE SHA_DIGEST_LENGTH * 2
 
 /* p_path is the absolute path and filename of the file that we're going to calculate the sha1 for.
  * p_hash_string is a 41 byte block of space that we'll use to populate with the string representation of the file's sha1.
