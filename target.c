@@ -422,9 +422,6 @@ target_receive_file()
 			}
 		}
 	}
-	//memcpy(m_transfer_buffer, "HASH\n\0", 6);
-	//memcpy(m_transfer_buffer, "DATA\n\0", 6);
-	//memcpy(m_transfer_buffer, "STOP\n\0", 6);
 	return result;
 }
 

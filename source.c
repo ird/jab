@@ -437,7 +437,7 @@ source_process_dirent(struct dirent *p_dirent)
 		{
 			if (errno != EACCES)
 			{
-				printf("source_process_dirent lstat %s\n", strerror(errno));
+				printf("source_process_dirent lstat %d %s%s \n", errno, strerror(errno), filename);
 				result = 0;
 			}
 		}

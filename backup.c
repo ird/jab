@@ -18,6 +18,13 @@
 #include "source.h"
 #include "target.h"
 
+/*
+ * ISSUES
+ * ======
+ * Target filenames with spaces aren't begin created correctly. Example "this is a file.txt" is being created as "this".
+ * source_process_dirent lstat Value too large for defined data type
+ *
+ */
 int
 main(int argc, char **argv)
 {
