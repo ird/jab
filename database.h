@@ -19,7 +19,7 @@
 #include "target.h"
 
 int
-database_open();
+database_open(char *p_path);
 
 int
 database_close();

@@ -318,16 +318,27 @@ database_upgrade(sqlite3 *db)
 }
 
 int
-database_open()
+database_open(char *p_path)
 {
 	int result = -1;
 	char *filename;
-	if ((filename = target_target_base_path_plus_filename("backup.sqlite3")) == NULL)
+	char *name = "backup.sqlite3";
+	size_t name_size = strlen(name);
+	size_t path_size = strlen(p_path);
+	if (path_size && *(p_path + path_size - 1) == '/')
 	{
+		path_size--;
+	}
+	if ((filename = (char *)malloc(path_size + name_size + 2)) == NULL)
+	{
+		printf("database_open malloc filename\n");
 		result = 0;
 	}
 	else
 	{
+		memcpy(filename, p_path, path_size);
+		*(filename + path_size) = '/';
+		memcpy(filename + path_size + 1, name, name_size + 1);
 		if (sqlite3_open(filename, &db) != SQLITE_OK)
 		{
 			result = 0;

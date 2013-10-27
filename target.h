@@ -14,9 +14,6 @@
 #ifndef TARGET_H_
 #define TARGET_H_
 
-char *
-target_target_base_path_plus_filename(char *p_filename);
-
 int
 target_setup(char *p_path, char *p_name);
 
@@ -24,7 +21,19 @@ int
 target_cleanup();
 
 int
+target_set_last();
+
+int
 target_receive_file();
+
+int
+target_receive_info();
+
+int
+target_receive_hash();
+
+int
+target_receive_data();
 
 int
 target_receive_done();
@@ -34,12 +43,6 @@ target_receive_path();
 
 int
 target_receive_back();
-
-int
-target_receive_hash();
-
-int
-target_receive_data();
 
 int
 target_receive_stop();

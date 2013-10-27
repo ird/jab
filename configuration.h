@@ -15,9 +15,15 @@
 #define CONFIGURATION_H_
 
 int
-configuration_get_int(const char *key, int *value);
+configuration_get_int(const char *p_key, int *p_value);
 
 int
 configuration_set_int(const char *p_key, int p_value);
+
+int
+configuration_get_text(const char *p_key, char **p_value);
+
+int
+configuration_set_text(const char *p_key, char *p_value);
 
 #endif /* CONFIGURATION_H_ */

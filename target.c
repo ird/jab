@@ -20,9 +20,14 @@
 #include <time.h>
 #include <unistd.h>
 
+#include "configuration.h"
 #include "database.h"
 #include "hash.h"
 #include "transfer.h"
+
+char *m_target_last;
+
+size_t m_target_last_size;
 
 char *m_target_name;
 
@@ -63,20 +68,6 @@ char m_target_current_hash[SHA1_STRING_SIZE + 1];
 off_t m_target_remaining_size;
 
 FILE *m_target_file;
-
-char *
-target_target_base_path_plus_filename(char *p_filename)
-{
-	char *path = NULL;
-	size_t path_size = strlen(p_filename);
-	path = (char *)malloc(m_target_base_path_size + path_size + 1);
-	if (path != NULL)
-	{
-		memcpy(path, m_target_base_path, m_target_base_path_size);
-		memcpy(path + m_target_base_path_size, p_filename, path_size + 1);
-	}
-	return path;
-}
 
 int
 target_enter_directory(char *p_directory_name)
@@ -177,98 +168,111 @@ int
 target_setup(char *p_path, char *p_name)
 {
 	int result = -1;
-	size_t path_size = strlen(p_path);
-	if (path_size && *(p_path + path_size - 1) == '/')
+	if (!configuration_get_text("last", &m_target_last))
 	{
-		if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
-		{
-			printf("target_setup malloc m_target_base_path/\n");
-			result = 0;
-		}
-		else
-		{
-			memcpy(m_target_base_path, p_path, path_size + 1);
-			m_target_base_path_size = path_size;
-		}
+		printf("target_setup configuration_get_text last\n");
+		result = 0;
 	}
 	else
 	{
-		if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
+		m_target_last_size = strlen(m_target_last);
+		size_t path_size = strlen(p_path);
+		if (path_size && *(p_path + path_size - 1) == '/')
 		{
-			printf("target_setup malloc m_target_base_path\n");
-			result = 0;
-		}
-		else
-		{
-			memcpy(m_target_base_path, p_path, path_size);
-			*(m_target_base_path + path_size) = '/';
-			*(m_target_base_path + path_size + 1) = 0;
-			m_target_base_path_size = path_size + 1;
-		}
-	}
-	if (result)
-	{
-		struct stat s;
-		if (stat(m_target_base_path, &s) == -1)
-		{
-			if (errno == ENOENT)
+			if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
 			{
-				if (mkdir(m_target_base_path, 0700) == -1)
-				{
-					printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_base_path);
-					result = 0;
-				}
+				printf("target_setup malloc m_target_base_path/\n");
+				result = 0;
 			}
 			else
 			{
-				printf("target_setup stat %d %s %s\n", errno, strerror(errno), m_target_base_path);
+				memcpy(m_target_base_path, p_path, path_size + 1);
+				m_target_base_path_size = path_size;
+			}
+		}
+		else
+		{
+			if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
+			{
+				printf("target_setup malloc m_target_base_path\n");
 				result = 0;
+			}
+			else
+			{
+				memcpy(m_target_base_path, p_path, path_size);
+				*(m_target_base_path + path_size) = '/';
+				*(m_target_base_path + path_size + 1) = 0;
+				m_target_base_path_size = path_size + 1;
 			}
 		}
 		if (result)
 		{
-			// TODO: name must not be empty or contain a /.
-			m_target_name_size = strlen(p_name);
-			if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+			struct stat s;
+			if (stat(m_target_base_path, &s) == -1)
 			{
-				printf("target_setup malloc m_target_name\n");
-				result = 0;
-			}
-			else
-			{
-				memcpy(m_target_name, p_name, m_target_name_size + 1);
-				if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
+				if (errno == ENOENT)
 				{
-					printf("target_setup malloc m_target_current_path\n");
+					if (mkdir(m_target_base_path, 0700) == -1)
+					{
+						printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_base_path);
+						result = 0;
+					}
+				}
+				else
+				{
+					printf("target_setup stat %d %s %s\n", errno, strerror(errno), m_target_base_path);
+					result = 0;
+				}
+			}
+			if (result)
+			{
+				// TODO: name must not be empty or contain a /.
+				m_target_name_size = strlen(p_name);
+				if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+				{
+					printf("target_setup malloc m_target_name\n");
 					result = 0;
 				}
 				else
 				{
-					memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
-					memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
-					*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
-					*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
-					m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
-					m_target_current_path_offset = m_target_current_path_size;
-					if (mkdir(m_target_current_path, 0700) == -1)
+					memcpy(m_target_name, p_name, m_target_name_size + 1);
+					if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
 					{
-						printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+						printf("target_setup malloc m_target_current_path\n");
 						result = 0;
+					}
+					else
+					{
+						memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
+						memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
+						*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
+						*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
+						m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
+						m_target_current_path_offset = m_target_current_path_size;
+						if (mkdir(m_target_current_path, 0700) == -1)
+						{
+							printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+							result = 0;
+						}
+						if (!result)
+						{
+							free(m_target_current_path);
+						}
 					}
 					if (!result)
 					{
-						free(m_target_current_path);
+						free(m_target_name);
 					}
 				}
-				if (!result)
-				{
-					free(m_target_name);
-				}
+			}
+			if (!result)
+			{
+				free(m_target_base_path);
 			}
 		}
 		if (!result)
 		{
-			free(m_target_base_path);
+			free(m_target_last);
 		}
 	}
 	return result;
@@ -278,9 +282,22 @@ int
 target_cleanup()
 {
 	int result = -1;
+	free(m_target_last);
 	free(m_target_base_path);
 	free(m_target_name);
 	free(m_target_current_path);
+	return result;
+}
+
+int
+target_set_last()
+{
+	int result = -1;
+	if (!configuration_set_text("last", m_target_name))
+	{
+		printf("target_set_last configuration_set_text %s\n", m_target_name);
+		result = 0;
+	}
 	return result;
 }
 
@@ -312,57 +329,10 @@ target_receive_file()
 }
 
 int
-target_receive_path()
+target_receive_info()
 {
 	int result = -1;
-	if (!target_enter_directory((char *)m_transfer_buffer))
-	{
-		printf("target_receive_path target_append_path_to_target_current_path %s\n", (char *)m_transfer_buffer);
-		result = 0;
-	}
-	else
-	{
-		struct stat s;
-		if (stat(m_target_current_path, &s) == -1)
-		{
-			if (errno != ENOENT)
-			{
-				printf("target_receive_path stat %d %s\n", errno, strerror(errno));
-				result = 0;
-			}
-			else
-			{
-				/*
-				 * The target directory doesn't exist so we'll create it with loose enough permissions to allow us to populate it. When we leave the directory
-				 * we'll set the permissions and date/time to the same as the source.
-				 */
-				if (mkdir(m_target_current_path, 0700) == -1)
-				{
-					printf("target_receive_path mkdir\n");
-					result = 0;
-				}
-				else
-				{
-					memcpy(m_transfer_buffer, "DONE\n\0", 6);
-				}
-			}
-		}
-		else
-		{
-			/*
-			 * The directory already exists so we don't need to create it. We might have problems populating it if the permissions are too restrictive but
-			 * we'll cross that bridge when we come to it.
-			 */
-			memcpy(m_transfer_buffer, "DONE\n\0", 6);
-		}
-	}
 	return result;
-}
-
-int
-target_receive_back()
-{
-	return target_leave_directory();
 }
 
 int
@@ -519,6 +489,60 @@ target_receive_done()
 		}
 	}
 	return result;
+}
+
+int
+target_receive_path()
+{
+	int result = -1;
+	if (!target_enter_directory((char *)m_transfer_buffer))
+	{
+		printf("target_receive_path target_append_path_to_target_current_path %s\n", (char *)m_transfer_buffer);
+		result = 0;
+	}
+	else
+	{
+		struct stat s;
+		if (stat(m_target_current_path, &s) == -1)
+		{
+			if (errno != ENOENT)
+			{
+				printf("target_receive_path stat %d %s\n", errno, strerror(errno));
+				result = 0;
+			}
+			else
+			{
+				/*
+				 * The target directory doesn't exist so we'll create it with loose enough permissions to allow us to populate it. When we leave the directory
+				 * we'll set the permissions and date/time to the same as the source.
+				 */
+				if (mkdir(m_target_current_path, 0700) == -1)
+				{
+					printf("target_receive_path mkdir\n");
+					result = 0;
+				}
+				else
+				{
+					memcpy(m_transfer_buffer, "DONE\n\0", 6);
+				}
+			}
+		}
+		else
+		{
+			/*
+			 * The directory already exists so we don't need to create it. We might have problems populating it if the permissions are too restrictive but
+			 * we'll cross that bridge when we come to it.
+			 */
+			memcpy(m_transfer_buffer, "DONE\n\0", 6);
+		}
+	}
+	return result;
+}
+
+int
+target_receive_back()
+{
+	return target_leave_directory();
 }
 
 int
