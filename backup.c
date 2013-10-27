@@ -18,6 +18,10 @@
 #include "source.h"
 #include "target.h"
 
+/*
+ * When compiling on the Raspberry Pi, one may have to add -D_FILE_OFFSET_BITS=64.
+ * http://code.google.com/p/libarchive/issues/detail?id=318
+ */
 int
 main(int argc, char **argv)
 {
