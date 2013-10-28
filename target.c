@@ -634,6 +634,7 @@ target_receive_hash()
 						{
 							memcpy(m_transfer_buffer, "DONE\n\0", 6);
 						}
+						free(existing_path);
 					}
 				}
 			}
