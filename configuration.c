@@ -2,7 +2,7 @@
  * configuration.c
  *
  *  Created on: 30/09/2013
- *      Author: stacey
+ *      Author: Stacey Richards
  *
  * The author disclaims copyright to this source code. In place of a legal notice, here is a blessing:
  *
