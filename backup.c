@@ -35,7 +35,11 @@
  *
  * Still haven't transferred symbolic links. Must get onto this.
  *
- * It seems that all the hard linking to zero length files is messing up the modified time which forces a hash to be sent for all zero length files.
+ * It seems that all the hard linking to zero length files is messing up the modified time which forces a hash to be sent for all zero length files. Actually
+ * because there is only the one inode for each of the files that hard links to it and the inode is what's storing the size, owner, group, ctime, atime and
+ * mtime, we have a little problem. All files that are completely different but exactly the same (have the same content but are actually different files with
+ * different owners and groups and times) should not be hard linked. This will mean that we'll have duplicate files unless we store the owners and groups and
+ * times in the database rather than in the filesystem. This is more of a version 2.0 thing. Hmmm.
  */
 int
 main(int argc, char **argv)

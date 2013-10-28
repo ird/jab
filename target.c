@@ -63,8 +63,6 @@ size_t m_target_current_path_offset;
 
 struct stat m_target_current_stat;
 
-struct tm m_target_current_tm;
-
 struct dirent m_target_current_dirent;
 
 char m_target_current_hash[SHA1_STRING_SIZE + 1];
@@ -378,34 +376,50 @@ target_receive_info()
 		sscanf
 		(
 			(char *)m_transfer_buffer,
-			"0%o %d %d %lu %lu %04d-%02d-%02d %02d:%02d:%02d\n",
+			"0%o %d %d %lu %lu",
 			&m_target_current_stat.st_mode,
 			&m_target_current_stat.st_uid,
 			&m_target_current_stat.st_gid,
 			&m_target_current_stat.st_size,
-			&m_target_current_stat.st_mtim.tv_sec,
-			&m_target_current_tm.tm_year,// + 1900,
-			&m_target_current_tm.tm_mon,// + 1,
-			&m_target_current_tm.tm_mday,
-			&m_target_current_tm.tm_hour,
-			&m_target_current_tm.tm_min,
-			&m_target_current_tm.tm_sec
+			&m_target_current_stat.st_mtim.tv_sec
 		);
 	if (input_items_matched == EOF)
 	{
 		printf("target_receive_info sscanf EOF\n");
 		result = 0;
 	}
-	else if (input_items_matched < 11)
+	else if (input_items_matched < 5)
 	{
 		printf("target_receive_info sscanf %d\n", input_items_matched);
 		result = 0;
 	}
 	else
 	{
-		m_target_current_tm.tm_year -= 1900;
-		m_target_current_tm.tm_mon--;
-		if (!*m_target_last)
+		if (!m_target_current_stat.st_size)
+		{
+			m_target_file = fopen(m_target_current_path, "w");
+			if (m_target_file == NULL)
+			{
+				printf("target_receive_info fopen %d %s %s\n", errno, strerror(errno), m_target_current_path);
+				result = 0;
+			}
+			else if (fclose(m_target_file) == EOF)
+			{
+				printf("target_receive_info fclose %d %s %s\n", errno, strerror(errno), m_target_current_path);
+				result = 0;
+			}
+			else if (!target_set_info())
+			{
+				printf("target_receive_info target_set_info %s\n", m_target_current_path);
+				result = 0;
+			}
+			else
+			{
+				m_source_files_matched_stat++;
+				memcpy(m_transfer_buffer, "DONE\n\0", 6);
+			}
+		}
+		else if (!*m_target_last)
 		{
 			memcpy(m_transfer_buffer, "HASH\n\0", 6);
 		}
@@ -714,6 +728,7 @@ target_receive_done()
 		if (!target_set_info())
 		{
 			printf("target_receive_done target_set_info\n");
+			result = 0;
 		}
 		else
 		{

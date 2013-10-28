@@ -55,39 +55,25 @@ int
 source_format_info(struct stat *p_stat)
 {
 	int result = -1;
-	struct tm *tm;
-	if ((tm = gmtime((time_t *)&p_stat->st_mtim)) == NULL)
+	int size =
+		snprintf
+		(
+			(void *)&m_transfer_buffer,
+			TRANSFER_BUFFER_SIZE,
+			"0%o %d %d %lu %lu",
+			p_stat->st_mode,
+			p_stat->st_uid,
+			p_stat->st_gid,
+			p_stat->st_size,
+			p_stat->st_mtim.tv_sec
+		);
+	if (size < 0)
 	{
 		result = 0;
 	}
-	else
+	else if (size >= TRANSFER_BUFFER_SIZE)
 	{
-		int size =
-			snprintf
-			(
-				(void *)&m_transfer_buffer,
-				TRANSFER_BUFFER_SIZE,
-				"0%o %d %d %lu %lu %04d-%02d-%02d %02d:%02d:%02d\n",
-				p_stat->st_mode,
-				p_stat->st_uid,
-				p_stat->st_gid,
-				p_stat->st_size,
-				p_stat->st_mtim.tv_sec,
-				tm->tm_year + 1900,
-				tm->tm_mon + 1,
-				tm->tm_mday,
-				tm->tm_hour,
-				tm->tm_min,
-				tm->tm_sec
-			);
-		if (size < 0)
-		{
-			result = 0;
-		}
-		else if (size >= TRANSFER_BUFFER_SIZE)
-		{
-			result = 0;
-		}
+		result = 0;
 	}
 	return result;
 }
