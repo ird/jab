@@ -22,6 +22,15 @@ int
 transfer_file_to_target();
 
 int
+transfer_info_to_target();
+
+int
+transfer_hash_to_target();
+
+int
+transfer_data_to_target();
+
+int
 transfer_done_to_target();
 
 int
@@ -29,12 +38,6 @@ transfer_path_to_target();
 
 int
 transfer_back_to_target();
-
-int
-transfer_hash_to_target();
-
-int
-transfer_data_to_target();
 
 int
 transfer_stop_to_target();

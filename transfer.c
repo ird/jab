@@ -24,6 +24,24 @@ transfer_file_to_target()
 }
 
 int
+transfer_info_to_target()
+{
+	return target_receive_info();
+}
+
+int
+transfer_hash_to_target()
+{
+	return target_receive_hash();
+}
+
+int
+transfer_data_to_target()
+{
+	return target_receive_data();
+}
+
+int
 transfer_done_to_target()
 {
 	return target_receive_done();
@@ -39,18 +57,6 @@ int
 transfer_back_to_target()
 {
 	return target_receive_back();
-}
-
-int
-transfer_hash_to_target()
-{
-	return target_receive_hash();
-}
-
-int
-transfer_data_to_target()
-{
-	return target_receive_data();
 }
 
 int

@@ -21,6 +21,12 @@
 /*
  * When compiling on the Raspberry Pi, one may have to add -D_FILE_OFFSET_BITS=64.
  * http://code.google.com/p/libarchive/issues/detail?id=318
+ *
+ * Database calls here should probably be shifted to target.
+ *
+ * At this stage, when starting a backup, the named directory should not currently exist. This means that a partial backup can not be completed by specifying
+ * the same name. There is some code still floating around that is expecting a "completion run". This should probably be cleaned out and then once everything
+ * else is working as expected, we can introduce partial backup completion later.
  */
 int
 main(int argc, char **argv)
@@ -28,7 +34,7 @@ main(int argc, char **argv)
 	int result = -1;
 	if (argc < 4)
 	{
-		printf("Usage: backup {source_path} {target_path} {backup_name}\n");
+		printf("Usage: backup source_path target_path backup_name\n");
 		result = 0;
 	}
 	else

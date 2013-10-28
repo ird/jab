@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
+#include <utime.h>
 
 #include "configuration.h"
 #include "database.h"
@@ -160,6 +161,36 @@ target_leave_file()
 	}
 	return result;
 }
+
+int
+target_set_info()
+{
+	int result = -1;
+	struct utimbuf utimbuf;
+	utimbuf.actime = 0;
+	utimbuf.modtime = m_target_current_stat.st_mtim.tv_sec;
+	if (chmod(m_target_current_path, m_target_current_stat.st_mode) == -1)
+	{
+		printf("target_set_info chmod %d %s %s 0%o\n", errno, strerror(errno), m_target_current_path, m_target_current_stat.st_mode);
+		result = 0;
+	}
+	else if (chown(m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid) == -1)
+	{
+		printf
+		(
+			"target_set_info chown %d %s %s %d %d\n",
+			errno, strerror(errno), m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid
+		);
+		result = 0;
+	}
+	else if (utime(m_target_current_path, &utimbuf) == -1)
+	{
+		printf("target_set_info utime %d %s %s %lu\n", errno, strerror(errno), m_target_current_path, utimbuf.modtime);
+		result = 0;
+	}
+	return result;
+}
+
 /*
  * target_setup should probably be called through transfer.c. target_setup will eventually be running on a different machine as source_setup. While
  * target_setup and target_source are running in the one process we'll just call target_setup directly.
@@ -307,24 +338,7 @@ target_receive_file()
 	int result = -1;
 	strcpy(m_target_current_dirent.d_name, (char *)m_transfer_buffer);
 	target_enter_file(m_target_current_dirent.d_name);
-	struct stat s;
-	if (stat(m_target_current_path, &s) == -1)
-	{
-		if (errno == ENOENT)
-		{
-			memcpy(m_transfer_buffer, "HASH\n\0", 6);
-		}
-		else
-		{
-			printf("target stat error: %d %s\n", errno, strerror(errno));
-			result = 0;
-		}
-	}
-	else
-	{
-		printf("target_receive_file file exists %s\n", m_target_current_path);
-		result = 0;
-	}
+	memcpy(m_transfer_buffer, "INFO\n\0", 6);
 	return result;
 }
 
@@ -332,6 +346,216 @@ int
 target_receive_info()
 {
 	int result = -1;
+	int input_items_matched =
+		sscanf
+		(
+			(char *)m_transfer_buffer,
+			"0%o %d %d %lu %lu %04d-%02d-%02d %02d:%02d:%02d\n",
+			&m_target_current_stat.st_mode,
+			&m_target_current_stat.st_uid,
+			&m_target_current_stat.st_gid,
+			&m_target_current_stat.st_size,
+			&m_target_current_stat.st_mtim.tv_sec,
+			&m_target_current_tm.tm_year,// + 1900,
+			&m_target_current_tm.tm_mon,// + 1,
+			&m_target_current_tm.tm_mday,
+			&m_target_current_tm.tm_hour,
+			&m_target_current_tm.tm_min,
+			&m_target_current_tm.tm_sec
+		);
+	if (input_items_matched == EOF)
+	{
+		printf("target_receive_info sscanf EOF\n");
+		result = 0;
+	}
+	else if (input_items_matched < 11)
+	{
+		printf("target_receive_info sscanf %d\n", input_items_matched);
+		result = 0;
+	}
+	else
+	{
+		m_target_current_tm.tm_year -= 1900;
+		m_target_current_tm.tm_mon--;
+		if (!*m_target_last)
+		{
+			memcpy(m_transfer_buffer, "HASH\n\0", 6);
+		}
+		else
+		{
+			int found = 0;
+			char *filename;
+			if ((filename = malloc(m_target_base_path_size + m_target_last_size + 1 + m_target_current_path_size - m_target_current_path_offset + 1)) == NULL)
+			{
+				printf("target_receive_info malloc\n");
+				result = 0;
+			}
+			else
+			{
+				memcpy(filename, m_target_base_path, m_target_base_path_size);
+				memcpy(filename + m_target_base_path_size, m_target_last, m_target_last_size);
+				*(filename + m_target_base_path_size + m_target_last_size) = '/';
+				memcpy
+				(
+					filename + m_target_base_path_size + m_target_last_size + 1,
+					m_target_current_path + m_target_current_path_offset,
+					m_target_current_path_size - m_target_current_path_offset + 1
+				);
+				struct stat s;
+				if (stat(filename, &s) == -1)
+				{
+					if (errno != ENOENT)
+					{
+						printf("target stat error: %d %s %s\n", errno, strerror(errno), filename);
+						result = 0;
+					}
+				}
+				else
+				{
+					if (s.st_size == m_target_current_stat.st_size && s.st_mtim.tv_sec == m_target_current_stat.st_mtim.tv_sec)
+					{
+						if (link(filename, m_target_current_path) == -1)
+						{
+							printf("target_receive_info link %d %s %s %s\n", errno, strerror(errno), filename, m_target_current_path);
+							result = 0;
+						}
+						else if (!target_set_info())
+						{
+							printf("target_receive_info target_set_info\n");
+							result = 0;
+						}
+						else
+						{
+							found = -1;
+						}
+					}
+				}
+				free(filename);
+				if (result && !found)
+				{
+					const unsigned char *name;
+					sqlite3_stmt *stmt;
+					if (!database_prepare("select file.name name from file where file.path = :path order by file.name desc", &stmt))
+					{
+						result = 0;
+					}
+					else
+					{
+						if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
+						{
+							result = 0;
+						}
+						else
+						{
+							while (result && !found)
+							{
+								int rc = sqlite3_step(stmt);
+								if (rc == SQLITE_DONE)
+								{
+									break;
+								}
+								else if (rc == SQLITE_ROW)
+								{
+									if ((name = sqlite3_column_text(stmt, 0)) == NULL)
+									{
+										printf("traget_receive_info sqlite3_column_text\n");
+										result = 0;
+									}
+									else
+									{
+										size_t name_size = sqlite3_column_bytes(stmt, 0) - 1;
+										if
+										(
+											(
+												filename =
+													malloc
+													(
+														m_target_base_path_size +
+														name_size +
+														1 +
+														m_target_current_path_size -
+														m_target_current_path_offset +
+														1
+													)
+											) ==
+											NULL
+										)
+										{
+											printf("target_receive_info malloc\n");
+											result = 0;
+										}
+										else
+										{
+											memcpy(filename, m_target_base_path, m_target_base_path_size);
+											memcpy(filename + m_target_base_path_size, name, name_size);
+											*(filename + m_target_base_path_size + name_size) = '/';
+											memcpy
+											(
+												filename + m_target_base_path_size + name_size + 1,
+												m_target_current_path + m_target_current_path_offset,
+												m_target_current_path_size - m_target_current_path_offset + 1
+											);
+											struct stat s;
+											if (stat(filename, &s) == -1)
+											{
+												printf("target_receive_info stat error: %d %s %s\n", errno, strerror(errno), filename);
+												result = 0;
+											}
+											else
+											{
+												if (s.st_size == m_target_current_stat.st_size && s.st_mtim.tv_sec == m_target_current_stat.st_mtim.tv_sec)
+												{
+													if (link(filename, m_target_current_path) == -1)
+													{
+														printf
+														(
+															"target_receive_info link %d %s %s %s\n", errno, strerror(errno), filename, m_target_current_path
+														);
+														result = 0;
+													}
+													else if (!target_set_info())
+													{
+														printf("target_receive_info target_set_info\n");
+														result = 0;
+													}
+													else
+													{
+														found = -1;
+													}
+												}
+											}
+											free(filename);
+										}
+									}
+								}
+								else
+								{
+									result = 0;
+								}
+							}
+						}
+						sqlite3_finalize(stmt);
+					}
+				}
+				if (result)
+				{
+					if (!found)
+					{
+						memcpy(m_transfer_buffer, "HASH\n\0", 6);
+					}
+					else
+					{
+						memcpy(m_transfer_buffer, "DONE\n\0", 6);
+						if (!target_leave_file())
+						{
+							printf("target_receive_info target_leave_file\n");
+							result = 0;
+						}
+					}
+				}
+			}
+		}
+	}
 	return result;
 }
 
@@ -456,36 +680,42 @@ target_receive_done()
 	}
 	else
 	{
-		sqlite3_stmt *stmt;
-		if (!database_prepare("insert into file (hash, name, path) values (:hash, :name, :path)", &stmt))
+		if (!target_set_info())
 		{
-			result = 0;
+			printf("target_receive_done target_set_info\n");
 		}
 		else
 		{
-			if (!database_bind_text(stmt, ":hash", m_target_current_hash))
+			sqlite3_stmt *stmt;
+			if (!database_prepare("insert into file (hash, name, path) values (:hash, :name, :path)", &stmt))
 			{
 				result = 0;
 			}
-			else if (!database_bind_text(stmt, ":name", m_target_name))
+			else
 			{
-				result = 0;
+				if (!database_bind_text(stmt, ":hash", m_target_current_hash))
+				{
+					result = 0;
+				}
+				else if (!database_bind_text(stmt, ":name", m_target_name))
+				{
+					result = 0;
+				}
+				else if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
+				{
+					result = 0;
+				}
+				else if (sqlite3_step(stmt) != SQLITE_DONE)
+				{
+					result = 0;
+				}
+				sqlite3_finalize(stmt);
+				if (!target_leave_file())
+				{
+					printf("target_receive_done target_leave_file\n");
+					result = 0;
+				}
 			}
-			else if (!database_bind_text(stmt, ":path", m_target_current_path + m_target_current_path_offset))
-			{
-				result = 0;
-			}
-			else if (sqlite3_step(stmt) != SQLITE_DONE)
-			{
-				result = 0;
-			}
-			sqlite3_finalize(stmt);
-		}
-
-		if (!target_leave_file())
-		{
-			printf("target_receive_done target_leave_file\n");
-			result = 0;
 		}
 	}
 	return result;
