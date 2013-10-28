@@ -22,6 +22,12 @@ extern unsigned long m_source_files_found;
 
 extern unsigned long m_source_files_skipped;
 
+extern unsigned long m_source_files_matched_stat;
+
+extern unsigned long m_source_files_matched_hash;
+
+extern unsigned long m_source_files_transferred;
+
 int
 source(char *p_path);
 

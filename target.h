@@ -15,13 +15,10 @@
 #define TARGET_H_
 
 int
-target_setup(char *p_path, char *p_name);
+target_init(char *p_path, char *p_name);
 
-int
-target_cleanup();
-
-int
-target_set_last();
+void
+target_free();
 
 int
 target_receive_file();

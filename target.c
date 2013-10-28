@@ -24,6 +24,7 @@
 #include "configuration.h"
 #include "database.h"
 #include "hash.h"
+#include "source.h"
 #include "transfer.h"
 
 char *m_target_last;
@@ -163,6 +164,18 @@ target_leave_file()
 }
 
 int
+target_set_last()
+{
+	int result = -1;
+	if (!configuration_set_text("last", m_target_name))
+	{
+		printf("target_set_last configuration_set_text %s\n", m_target_name);
+		result = 0;
+	}
+	return result;
+}
+
+int
 target_set_info()
 {
 	int result = -1;
@@ -196,140 +209,142 @@ target_set_info()
  * target_setup and target_source are running in the one process we'll just call target_setup directly.
  */
 int
-target_setup(char *p_path, char *p_name)
+target_init(char *p_path, char *p_name)
 {
 	int result = -1;
-	if (!configuration_get_text("last", &m_target_last))
+	if (!database_begin_transaction())
 	{
-		printf("target_setup configuration_get_text last\n");
 		result = 0;
 	}
 	else
 	{
-		m_target_last_size = strlen(m_target_last);
-		size_t path_size = strlen(p_path);
-		if (path_size && *(p_path + path_size - 1) == '/')
+		if (!configuration_get_text("last", &m_target_last))
 		{
-			if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
-			{
-				printf("target_setup malloc m_target_base_path/\n");
-				result = 0;
-			}
-			else
-			{
-				memcpy(m_target_base_path, p_path, path_size + 1);
-				m_target_base_path_size = path_size;
-			}
+			printf("target_setup configuration_get_text last\n");
+			result = 0;
 		}
 		else
 		{
-			if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
+			m_target_last_size = strlen(m_target_last);
+			size_t path_size = strlen(p_path);
+			if (path_size && *(p_path + path_size - 1) == '/')
 			{
-				printf("target_setup malloc m_target_base_path\n");
-				result = 0;
-			}
-			else
-			{
-				memcpy(m_target_base_path, p_path, path_size);
-				*(m_target_base_path + path_size) = '/';
-				*(m_target_base_path + path_size + 1) = 0;
-				m_target_base_path_size = path_size + 1;
-			}
-		}
-		if (result)
-		{
-			struct stat s;
-			if (stat(m_target_base_path, &s) == -1)
-			{
-				if (errno == ENOENT)
+				if ((m_target_base_path = (char *)malloc(path_size + 1)) == NULL)
 				{
-					if (mkdir(m_target_base_path, 0700) == -1)
-					{
-						printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_base_path);
-						result = 0;
-					}
+					printf("target_setup malloc m_target_base_path/\n");
+					result = 0;
 				}
 				else
 				{
-					printf("target_setup stat %d %s %s\n", errno, strerror(errno), m_target_base_path);
+					memcpy(m_target_base_path, p_path, path_size + 1);
+					m_target_base_path_size = path_size;
+				}
+			}
+			else
+			{
+				if ((m_target_base_path = (char *)malloc(path_size + 2)) == NULL)
+				{
+					printf("target_setup malloc m_target_base_path\n");
 					result = 0;
+				}
+				else
+				{
+					memcpy(m_target_base_path, p_path, path_size);
+					*(m_target_base_path + path_size) = '/';
+					*(m_target_base_path + path_size + 1) = 0;
+					m_target_base_path_size = path_size + 1;
 				}
 			}
 			if (result)
 			{
-				// TODO: name must not be empty or contain a /.
-				m_target_name_size = strlen(p_name);
-				if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+				struct stat s;
+				if (stat(m_target_base_path, &s) == -1)
 				{
-					printf("target_setup malloc m_target_name\n");
-					result = 0;
-				}
-				else
-				{
-					memcpy(m_target_name, p_name, m_target_name_size + 1);
-					if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
+					if (errno == ENOENT)
 					{
-						printf("target_setup malloc m_target_current_path\n");
+						if (mkdir(m_target_base_path, 0700) == -1)
+						{
+							printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_base_path);
+							result = 0;
+						}
+					}
+					else
+					{
+						printf("target_setup stat %d %s %s\n", errno, strerror(errno), m_target_base_path);
+						result = 0;
+					}
+				}
+				if (result)
+				{
+					// TODO: name must not be empty or contain a /.
+					m_target_name_size = strlen(p_name);
+					if ((m_target_name = (char *)malloc(m_target_name_size + 1)) == NULL)
+					{
+						printf("target_setup malloc m_target_name\n");
 						result = 0;
 					}
 					else
 					{
-						memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
-						memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
-						*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
-						*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
-						m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
-						m_target_current_path_offset = m_target_current_path_size;
-						if (mkdir(m_target_current_path, 0700) == -1)
+						memcpy(m_target_name, p_name, m_target_name_size + 1);
+						if ((m_target_current_path = (char *)malloc(m_target_base_path_size + m_target_name_size + 2)) == NULL)
 						{
-							printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+							printf("target_setup malloc m_target_current_path\n");
 							result = 0;
+						}
+						else
+						{
+							memcpy(m_target_current_path, m_target_base_path, m_target_base_path_size);
+							memcpy(m_target_current_path + m_target_base_path_size, m_target_name, m_target_name_size);
+							*(m_target_current_path + m_target_base_path_size + m_target_name_size) = '/';
+							*(m_target_current_path + m_target_base_path_size + m_target_name_size + 1) = 0;
+							m_target_current_path_size = m_target_base_path_size + m_target_name_size + 1;
+							m_target_current_path_offset = m_target_current_path_size;
+							if (mkdir(m_target_current_path, 0700) == -1)
+							{
+								printf("target_setup mkdir %d %s %s\n", errno, strerror(errno), m_target_current_path);
+								result = 0;
+							}
+							if (!result)
+							{
+								free(m_target_current_path);
+							}
 						}
 						if (!result)
 						{
-							free(m_target_current_path);
+							free(m_target_name);
 						}
 					}
-					if (!result)
-					{
-						free(m_target_name);
-					}
+				}
+				if (!result)
+				{
+					free(m_target_base_path);
 				}
 			}
 			if (!result)
 			{
-				free(m_target_base_path);
+				free(m_target_last);
 			}
 		}
 		if (!result)
 		{
-			free(m_target_last);
+			database_rollback_transaction();
 		}
 	}
 	return result;
 }
 
-int
-target_cleanup()
+void
+target_free()
 {
-	int result = -1;
+	target_set_last();
+	if (!database_commit_transaction())
+	{
+		database_rollback_transaction();
+	}
 	free(m_target_last);
 	free(m_target_base_path);
 	free(m_target_name);
 	free(m_target_current_path);
-	return result;
-}
-
-int
-target_set_last()
-{
-	int result = -1;
-	if (!configuration_set_text("last", m_target_name))
-	{
-		printf("target_set_last configuration_set_text %s\n", m_target_name);
-		result = 0;
-	}
-	return result;
 }
 
 int
@@ -337,8 +352,14 @@ target_receive_file()
 {
 	int result = -1;
 	strcpy(m_target_current_dirent.d_name, (char *)m_transfer_buffer);
-	target_enter_file(m_target_current_dirent.d_name);
-	memcpy(m_transfer_buffer, "INFO\n\0", 6);
+	if (!target_enter_file(m_target_current_dirent.d_name))
+	{
+		result = 0;
+	}
+	else
+	{
+		memcpy(m_transfer_buffer, "INFO\n\0", 6);
+	}
 	return result;
 }
 
@@ -545,6 +566,7 @@ target_receive_info()
 					}
 					else
 					{
+						m_source_files_matched_stat++;
 						memcpy(m_transfer_buffer, "DONE\n\0", 6);
 						if (!target_leave_file())
 						{
@@ -632,6 +654,7 @@ target_receive_hash()
 						}
 						else
 						{
+							m_source_files_matched_hash++;
 							memcpy(m_transfer_buffer, "DONE\n\0", 6);
 						}
 						free(existing_path);
@@ -711,6 +734,7 @@ target_receive_done()
 					result = 0;
 				}
 				sqlite3_finalize(stmt);
+				m_source_files_transferred++;
 				if (!target_leave_file())
 				{
 					printf("target_receive_done target_leave_file\n");

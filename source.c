@@ -32,6 +32,12 @@ unsigned long m_source_files_found;
 
 unsigned long m_source_files_skipped;
 
+unsigned long m_source_files_matched_stat;
+
+unsigned long m_source_files_matched_hash;
+
+unsigned long m_source_files_transferred;
+
 dev_t m_source_dev;
 
 char *m_source_base_path;
@@ -521,7 +527,17 @@ source(char *p_path)
 			m_source_directories_skipped = 0;
 			m_source_files_found = 0;
 			m_source_files_skipped = 0;
+			m_source_files_matched_stat = 0;
+			m_source_files_matched_hash = 0;
+			m_source_files_transferred = 0;
 			result = source_process_current_path();
+			printf("Directories found:   %lu\n", m_source_directories_found);
+			printf("Directories skipped: %lu\n", m_source_directories_skipped);
+			printf("Files found:         %lu\n", m_source_files_found);
+			printf("Files skipped:       %lu\n", m_source_files_skipped);
+			printf("Files matched stat:  %lu\n", m_source_files_matched_stat);
+			printf("Files matched hash:  %lu\n", m_source_files_matched_hash);
+			printf("Files transferred:   %lu\n", m_source_files_transferred);
 			free(m_source_current_path);
 		}
 		free(m_source_base_path);
