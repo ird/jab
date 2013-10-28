@@ -32,6 +32,10 @@
  * database as either the first instance of the file's hash or a following instance. I need to think about the modified time before removing that code though.
  *
  * There seems to be too many hash matches. Look into this.
+ *
+ * Still haven't transferred symbolic links. Must get onto this.
+ *
+ * It seems that all the hard linking to zero length files is messing up the modified time which forces a hash to be sent for all zero length files.
  */
 int
 main(int argc, char **argv)

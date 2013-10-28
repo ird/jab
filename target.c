@@ -27,6 +27,8 @@
 #include "source.h"
 #include "transfer.h"
 
+int m_uid;
+
 char *m_target_last;
 
 size_t m_target_last_size;
@@ -187,7 +189,11 @@ target_set_info()
 		printf("target_set_info chmod %d %s %s 0%o\n", errno, strerror(errno), m_target_current_path, m_target_current_stat.st_mode);
 		result = 0;
 	}
-	else if (chown(m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid) == -1)
+	/*
+	 * If root doesn't own the process then user owning the process will only be able to set the user to herself and the group to one that she belongs to. For
+	 * the mean time, we'll only change the owner and group if root owns the process (ie. m_uid == 0).
+	 */
+	else if (!m_uid && chown(m_target_current_path, m_target_current_stat.st_uid, m_target_current_stat.st_gid) == -1)
 	{
 		printf
 		(
@@ -212,6 +218,7 @@ int
 target_init(char *p_path, char *p_name)
 {
 	int result = -1;
+	m_uid = getuid();
 	if (!database_begin_transaction())
 	{
 		result = 0;
