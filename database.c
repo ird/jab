@@ -176,12 +176,9 @@ database_is_empty(sqlite3 *db)
 		{
 			result = 0;
 		}
-		else
+		else if (sqlite3_column_int64(stmt, 0) != 0)
 		{
-			if (sqlite3_column_int64(stmt, 0) != 0)
-			{
-				result = 0;
-			}
+			result = 0;
 		}
 		sqlite3_finalize(stmt);
 	}
@@ -343,26 +340,17 @@ database_open(char *p_path)
 		{
 			result = 0;
 		}
-		else
+		else if (!database_prepare_empty(db))
 		{
-			if (!database_prepare_empty(db))
-			{
-				result = 0;
-			}
-			else
-			{
-				if (!database_is_valid(db))
-				{
-					result = 0;
-				}
-				else
-				{
-					if (!database_upgrade(db))
-					{
-						result = 0;
-					}
-				}
-			}
+			result = 0;
+		}
+		else if (!database_is_valid(db))
+		{
+			result = 0;
+		}
+		else if (!database_upgrade(db))
+		{
+			result = 0;
 		}
 		free(filename);
 	}
