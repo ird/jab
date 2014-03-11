@@ -1,35 +1,23 @@
 CC = gcc
-CFLAGS = -g -Wall
-LIBS = -lcrypto -lsqlite3
+CFLAGS = -g -Wall -D_FILE_OFFSET_BITS=64
+LIBS = -lcrypto
 
-all: backup
+all: jab jabfs
 	
-backup: backup.o configuration.o database.o hash.o path.o source.o target.o transfer.o
-	$(CC) $(CFLAGS) -o backup backup.o configuration.o database.o hash.o path.o source.o target.o transfer.o $(LIBS)
+jab: jab.o jab_common.o
+	$(CC) $(CFLAGS) -o jab jab.o jab_common.o $(LIBS)
 
-backup.o: backup.c
-	$(CC) $(CFLAGS) -o backup.o -c backup.c
+jab.o: jab.c
+	$(CC) $(CFLAGS) -c -o jab.o -c jab.c
+
+jabfs: jabfs.o jab_common.o
+	$(CC) $(CFLAGS) -o jabfs jabfs.o jab_common.o -lfuse
+
+jabfs.o: jabfs.c
+	$(CC) $(CFLAGS) -c -o jabfs.o -c jabfs.c
 	
-configuration.o: configuration.h configuration.c
-	$(CC) $(CFLAGS) -o configuration.o -c configuration.c
+jab_common.o: jab_common.c
+	$(CC) $(CFLAGS) -c -o jab_common.o jab_common.c
 	
-database.o: database.h database.c
-	$(CC) $(CFLAGS) -o database.o -c database.c
-
-hash.o: hash.h hash.c
-	$(CC) $(CFLAGS) -o hash.o -c hash.c
-	
-path.o: path.h path.c
-	$(CC) $(CFLAGS) -o path.o -c path.c
-
-source.o: source.h source.c
-	$(CC) $(CFLAGS) -o source.o -c source.c
-
-target.o: target.h target.c
-	$(CC) $(CFLAGS) -o target.o -c target.c
-
-transfer.o: transfer.h transfer.c
-	$(CC) $(CFLAGS) -o transfer.o -c transfer.c
-
 clean:
-	rm -rf *.o backup
+	rm -rf *.o jab jabfs
