@@ -24,6 +24,8 @@
 
 #include "jab_common.h"
 
+char *m_target_path;
+int m_dev;
 int m_uid;
 
 /*
@@ -130,7 +132,7 @@ int copy_file_if_not_exist(const char *p_source_path, const char *p_target_path)
 		}
 		else
 		{
-			if ((target_fd = open(p_target_path, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0700)) == -1)
+			if ((target_fd = open(p_target_path, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0600)) == -1)
 			{
 				print_error();
 				result = 0;
@@ -179,7 +181,7 @@ int copy_file_if_not_exist(const char *p_source_path, const char *p_target_path)
 	return result;
 }
 
-int walk(const char *p_source_path, const char *p_target_path, const char *p_dotjab_path, const char *p_backup_path, const char *p_filename)
+int walk(const char *p_source_path, const char *p_dotjab_path, const char *p_backup_path, const char *p_filename)
 {
 	int result = -1;
 	char *source_path;
@@ -196,7 +198,7 @@ int walk(const char *p_source_path, const char *p_target_path, const char *p_dot
 			char *backup_path;
 			if ((backup_path = append_filename_to_path(p_backup_path, p_filename)) != NULL)
 			{
-				printf("%s -> %s\n", source_path, backup_path);
+				printf("%s\n", source_path);
 				struct stat dir_stat;
 				if (lstat(source_path, &dir_stat) == -1)
 				{
@@ -257,7 +259,6 @@ int walk(const char *p_source_path, const char *p_target_path, const char *p_dot
 										}
 										else
 										{
-											printf("%s %s\n", sha1_string, dirent->d_name);
 											char *dotjab_filename;
 											if ((dotjab_filename = sha1_string_to_path(p_dotjab_path, sha1_string)) == NULL)
 											{
@@ -265,7 +266,6 @@ int walk(const char *p_source_path, const char *p_target_path, const char *p_dot
 											}
 											else
 											{
-												printf("%s\n", dotjab_filename);
 												if (copy_file_if_not_exist(path, dotjab_filename) == -1)
 												{
 													int pointer_fd;
@@ -274,61 +274,68 @@ int walk(const char *p_source_path, const char *p_target_path, const char *p_dot
 													{
 														printf("Out of memory.\n");
 													}
-													else if ((pointer_fd = open(pointer_filename, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0700)) == -1)
-													{
-														print_error();
-													}
 													else
 													{
-														if (write(pointer_fd, sha1_string, SHA_DIGEST_LENGTH * 2 + 1) < SHA_DIGEST_LENGTH * 2 + 1)
-														{
-															printf("Failed to write pointer file.\n");
-														}
-														else
-														{
-															// TODO: write file size after sha1. Or maybe we don't need the file size as we
-															// should be able to get that from the .jab SHA1 file.
-														}
-														if (close(pointer_fd) == -1)
+														if ((pointer_fd = open(pointer_filename, O_CREAT | O_EXCL | O_TRUNC | O_WRONLY, 0700)) == -1)
 														{
 															print_error();
 														}
 														else
 														{
-															if (m_uid == 0)
+															if (write(pointer_fd, sha1_string, SHA_DIGEST_LENGTH * 2 + 1) < SHA_DIGEST_LENGTH * 2 + 1)
 															{
-																if (chmod(pointer_filename, stat.st_mode) == -1)
-																{
-																	printf("Failed to set mode.\n");
-																}
-																if (chown(pointer_filename, stat.st_uid, stat.st_gid) == -1)
-																{
-																	printf("Failed to set owner and group.\n");
-																}
-																// TODO: Set create time also.
-																struct utimbuf utimbuf;
-																utimbuf.actime = stat.st_atim.tv_sec;
-																utimbuf.modtime = stat.st_mtim.tv_sec;
-																if (utime(pointer_filename, &utimbuf) == -1)
-																{
-																	printf("Failed to set times.\n");
-																}
+																printf("Failed to write pointer file.\n");
 															}
 															else
 															{
+																// TODO: write file size after sha1. Or maybe we don't need the file size as we
+																// should be able to get that from the .jab SHA1 file.
 															}
-															// TODO: if pid 0, set owner, group, permissions and time stamps
-															// otherwise set permissions and time stamps.
+															if (close(pointer_fd) == -1)
+															{
+																print_error();
+															}
+															else
+															{
+																if (m_uid == 0)
+																{
+																	if (chmod(pointer_filename, stat.st_mode) == -1)
+																	{
+																		printf("Failed to set mode.\n");
+																	}
+																	if (chown(pointer_filename, stat.st_uid, stat.st_gid) == -1)
+																	{
+																		printf("Failed to set owner and group.\n");
+																	}
+																	// TODO: Set create time also.
+																	struct utimbuf utimbuf;
+																	utimbuf.actime = stat.st_atim.tv_sec;
+																	utimbuf.modtime = stat.st_mtim.tv_sec;
+																	if (utime(pointer_filename, &utimbuf) == -1)
+																	{
+																		printf("Failed to set times.\n");
+																	}
+																}
+																else
+																{
+																}
+																// TODO: if pid 0, set owner, group, permissions and time stamps
+																// otherwise set permissions and time stamps.
+															}
 														}
+														free(pointer_filename);
 													}
 												}
 												free(dotjab_filename);
 											}
 										}
 									}
-									else if (S_ISDIR(stat.st_mode))
+									/*
+									 * We'll stay on the one device and we won't backup our own backup.
+									 */
+									else if (S_ISDIR(stat.st_mode) && (stat.st_dev == m_dev) && (strcmp(path, m_target_path) != 0))
 									{
-										walk(source_path, p_target_path, p_dotjab_path, backup_path, dirent->d_name);
+										walk(source_path, p_dotjab_path, backup_path, dirent->d_name);
 									}
 									else if (S_ISCHR(stat.st_mode))
 									{
@@ -350,6 +357,31 @@ int walk(const char *p_source_path, const char *p_target_path, const char *p_dot
 							}
 						}
 					}
+					if (m_uid == 0)
+					{
+						if (chmod(backup_path, dir_stat.st_mode) == -1)
+						{
+							printf("Failed to set mode.\n");
+						}
+						if (chown(backup_path, dir_stat.st_uid, dir_stat.st_gid) == -1)
+						{
+							printf("Failed to set owner and group.\n");
+						}
+						// TODO: Set create time also.
+						struct utimbuf utimbuf;
+						utimbuf.actime = dir_stat.st_atim.tv_sec;
+						utimbuf.modtime = dir_stat.st_mtim.tv_sec;
+						if (utime(backup_path, &utimbuf) == -1)
+						{
+							printf("Failed to set times.\n");
+						}
+					}
+					else
+					{
+					}
+					// TODO: if pid 0, set owner, group, permissions and time stamps
+					// otherwise set permissions and time stamps.
+
 				}
 				free(backup_path);
 			}
@@ -373,43 +405,58 @@ main(int argc, char **argv)
 	{
 		m_uid = getuid();
 		char *source_path = *(argv + 1);
-		char *target_path = *(argv + 2);
-		char *backup_name = *(argv + 3);
-		char *dotjab_path;
-		char *backup_path;
-		if ((dotjab_path = append_filename_to_path(target_path, ".jab")) == NULL)
+		if ((m_target_path = realpath(*(argv +2), NULL)) == NULL)
 		{
-			printf("Out of memory.\n");
+			print_error();
 			result = 0;
 		}
 		else
 		{
-			if (directory_exists(source_path) == 0)
-			{
-				printf("Source path does not exist.\n");
-				result = 0;
-			}
-			else if (create_directory_if_not_exists(target_path, 0700) == 0)
-			{
-				print_error();
-				result = 0;
-			}
-			else if (create_directory_if_not_exists(dotjab_path, 0700) == 0)
-			{
-				print_error();
-				result = 0;
-			}
-			else if ((backup_path = append_filename_to_path(target_path, backup_name)) == NULL)
+			char *backup_name = *(argv + 3);
+			char *dotjab_path;
+			char *backup_path;
+			struct stat stat;
+			if ((dotjab_path = append_filename_to_path(m_target_path, ".jab")) == NULL)
 			{
 				printf("Out of memory.\n");
 				result = 0;
 			}
 			else
 			{
-				result = walk(source_path, target_path, dotjab_path, backup_path, "");
-				free(backup_path);
+				if (directory_exists(source_path) == 0)
+				{
+					printf("Source path does not exist.\n");
+					result = 0;
+				}
+				else if (create_directory_if_not_exists(m_target_path, 0700) == 0)
+				{
+					print_error();
+					result = 0;
+				}
+				else if (create_directory_if_not_exists(dotjab_path, 0700) == 0)
+				{
+					print_error();
+					result = 0;
+				}
+				else if ((backup_path = append_filename_to_path(m_target_path, backup_name)) == NULL)
+				{
+					printf("Out of memory.\n");
+					result = 0;
+				}
+				else if (lstat(source_path, &stat) == -1)
+				{
+					print_error();
+					result = 0;
+				}
+				else
+				{
+					m_dev = stat.st_dev;
+					result = walk(source_path, dotjab_path, backup_path, "");
+					free(backup_path);
+				}
+				free(dotjab_path);
 			}
-			free(dotjab_path);
+			free(m_target_path);
 		}
 	}
 	if (result)
