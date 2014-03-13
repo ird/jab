@@ -25,6 +25,7 @@
 #include "jab_common.h"
 
 char *m_target_path;
+char *m_dotjab_path;
 int m_dev;
 int m_uid;
 
@@ -181,7 +182,7 @@ int copy_file_if_not_exist(const char *p_source_path, const char *p_target_path)
 	return result;
 }
 
-int walk(const char *p_source_path, const char *p_dotjab_path, const char *p_backup_path, const char *p_filename)
+int walk(const char *p_source_path, const char *p_backup_path, const char *p_filename)
 {
 	int result = -1;
 	char *source_path;
@@ -260,7 +261,7 @@ int walk(const char *p_source_path, const char *p_dotjab_path, const char *p_bac
 										else
 										{
 											char *dotjab_filename;
-											if ((dotjab_filename = sha1_string_to_path(p_dotjab_path, sha1_string)) == NULL)
+											if ((dotjab_filename = sha1_string_to_path(m_dotjab_path, sha1_string)) == NULL)
 											{
 												printf("Out of memory.\n");
 											}
@@ -335,7 +336,7 @@ int walk(const char *p_source_path, const char *p_dotjab_path, const char *p_bac
 									 */
 									else if (S_ISDIR(stat.st_mode) && (stat.st_dev == m_dev) && (strcmp(path, m_target_path) != 0))
 									{
-										walk(source_path, p_dotjab_path, backup_path, dirent->d_name);
+										walk(source_path, backup_path, dirent->d_name);
 									}
 									else if (S_ISCHR(stat.st_mode))
 									{
@@ -413,10 +414,9 @@ main(int argc, char **argv)
 		else
 		{
 			char *backup_name = *(argv + 3);
-			char *dotjab_path;
 			char *backup_path;
 			struct stat stat;
-			if ((dotjab_path = append_filename_to_path(m_target_path, ".jab")) == NULL)
+			if ((m_dotjab_path = append_filename_to_path(m_target_path, ".jab")) == NULL)
 			{
 				printf("Out of memory.\n");
 				result = 0;
@@ -433,7 +433,7 @@ main(int argc, char **argv)
 					print_error();
 					result = 0;
 				}
-				else if (create_directory_if_not_exists(dotjab_path, 0700) == 0)
+				else if (create_directory_if_not_exists(m_dotjab_path, 0700) == 0)
 				{
 					print_error();
 					result = 0;
@@ -451,10 +451,10 @@ main(int argc, char **argv)
 				else
 				{
 					m_dev = stat.st_dev;
-					result = walk(source_path, dotjab_path, backup_path, "");
+					result = walk(source_path, backup_path, "");
 					free(backup_path);
 				}
-				free(dotjab_path);
+				free(m_dotjab_path);
 			}
 			free(m_target_path);
 		}
