@@ -20,36 +20,36 @@
 #include "jab_common.h"
 
 char *
-append_filename_to_path(const char *path, const char *filename)
+append_filename_to_path(const char *p_path, const char *p_filename)
 {
 	char *result = NULL;
-	int path_length = strlen(path);
-	if ((path_length = strlen(path)) != 0)
+	int path_length = strlen(p_path);
+	if ((path_length = strlen(p_path)) != 0)
 	{
 		int filename_length;
-		if ((filename_length = strlen(filename)) == 0)
+		if ((filename_length = strlen(p_filename)) == 0)
 		{
-			if ((path_length != 1) && (*(path + path_length - 1) == '/'))
+			if ((path_length != 1) && (*(p_path + path_length - 1) == '/'))
 			{
 				path_length--;
 			}
 			if ((result = malloc(path_length + 1)) != NULL)
 			{
-				memcpy(result, path, path_length);
+				memcpy(result, p_path, path_length);
 				*(result + path_length) = 0;
 			}
 		}
 		else
 		{
-			if (*(path + path_length - 1) == '/')
+			if (*(p_path + path_length - 1) == '/')
 			{
 				path_length--;
 			}
 			if ((result = malloc(path_length + filename_length + 2)) != NULL)
 			{
-				memcpy(result, path, path_length);
+				memcpy(result, p_path, path_length);
 				*(result + path_length) = '/';
-				memcpy(result + path_length + 1, filename, filename_length + 1);
+				memcpy(result + path_length + 1, p_filename, filename_length + 1);
 			}
 		}
 	}
@@ -57,11 +57,11 @@ append_filename_to_path(const char *path, const char *filename)
 }
 
 int
-directory_exists(const char *path)
+directory_exists(const char *p_path)
 {
 	int result = -1;
 	DIR *dir;
-	if ((dir = opendir(path)) == NULL) // TODO: Might exist but don't have permission to read? Must check.
+	if ((dir = opendir(p_path)) == NULL) // TODO: Might exist but don't have permission to read? Must check.
 	{
 		result = 0;
 	}
@@ -73,16 +73,16 @@ directory_exists(const char *path)
 }
 
 int
-create_directory_if_not_exists(const char *path, mode_t mode)
+create_directory_if_not_exists(const char *p_path, mode_t p_mode)
 {
 	int result = -1;
-	if (directory_exists(path) == 0)
+	if (directory_exists(p_path) == 0)
 	{
 		if (errno != 2)
 		{
 			result = 0;
 		}
-		else if (mkdir(path, mode) == -1)
+		else if (mkdir(p_path, p_mode) == -1)
 		{
 			result = 0;
 		}
