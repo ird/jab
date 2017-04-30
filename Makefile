@@ -16,7 +16,7 @@ jabfs: jabfs.o jab_common.o
 jabfs.o: jabfs.c
 	$(CC) $(CFLAGS) -c -o jabfs.o -c jabfs.c
 	
-jab_common.o: jab_common.c
+jab_common.o: jab_common.c jab_common.h
 	$(CC) $(CFLAGS) -c -o jab_common.o jab_common.c
 	
 clean:
